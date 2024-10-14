@@ -41,7 +41,7 @@ class StructTemplate:
                 repeat += ord(c) - ord('0')
                 continue
 
-            elif c.upper() in "CB?HILFQD":
+            elif c.upper() in "CB?HILFQD" or c == 'x':
                 for _ in range(max(repeat, 1)):
                     yield c
                 repeat = 0
