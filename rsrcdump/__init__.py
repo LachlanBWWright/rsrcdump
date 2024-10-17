@@ -33,8 +33,15 @@ def save_to_json(
         include_types: list[str] = [], #Only include resources of these types (All if empty)
         exclude_types: list[str] = [], #Skip resources of these types
 ):
+    try:
+        adf_entries = unpack_adf(bytes)
+        adf_resfork = adf_entries[ADF_ENTRYNUM_RESOURCEFORK]
+        fork = ResourceFork.from_bytes(adf_resfork)
+    except NotADFError:
+        fork = ResourceFork.from_bytes(bytes)
+
     return resource_fork_to_json(
-        ResourceFork.from_bytes(bytes),
+        fork,
         [parse_type_name(x) for x in include_types],
         [parse_type_name(x) for x in exclude_types],
         _get_converters(struct_specs),
@@ -49,6 +56,7 @@ def load_from_json(
         only_types: list[str] = [],
         skip_types: list[str] = []
 ):
+
     return json_to_resource_fork(
         json_blob,
         _get_converters(struct_specs),
