@@ -98,7 +98,7 @@ def main():
 
     for template_arg in struct_specs:
         converter, restype = StructConverter.from_template_string_with_typename(template_arg)
-        if converter:
+        if converter and restype:
             converters[restype] = converter
 
 
@@ -169,7 +169,8 @@ def main():
             converters=converters,
             only_types=only_types,
             skip_types=skip_types,
-            encoding=args.encoding)
+            #encoding=args.encoding
+        )
 
         binary_fork = fork.pack()
 
@@ -214,7 +215,7 @@ def main():
 if __name__ == "__main__":
     main()
 
-def load_resmap(inpath: str):
+def load_resmap(inpath: str) -> tuple[ResourceFork, dict[int, bytes]]:
     with open(inpath, 'rb') as file:
         data = file.read()
 
@@ -225,4 +226,4 @@ def load_resmap(inpath: str):
         return fork, adf_entries
     except NotADFError:
         fork = ResourceFork.from_bytes(data)
-        return fork, []
+        return fork, {}

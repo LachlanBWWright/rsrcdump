@@ -14,7 +14,8 @@ class JSONEncoderBase16Fallback(json.JSONEncoder):
         if isinstance(o, bytes):
             return base64.b16encode(o).decode('ascii')
         else:
-            return JSONEncoderBase16Fallback(self, o)
+            return super().default(o)
+            #return JSONEncoderBase16Fallback(self, o)
 
 
 def resource_fork_to_json_file(

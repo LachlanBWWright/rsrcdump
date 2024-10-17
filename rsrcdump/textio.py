@@ -7,7 +7,7 @@ def get_global_encoding() -> str:
     return GLOBAL_ENCODING
 
 
-def set_global_encoding(encoding: str) -> str:
+def set_global_encoding(encoding: str):
     global GLOBAL_ENCODING
     GLOBAL_ENCODING = encoding
 
@@ -32,6 +32,6 @@ def parse_type_name(sane_name: str) -> bytes:
 def sanitize_resource_name(name: str | bytes) -> str:
     sanitized = ""
     for c in name:
-        if c in 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-':
-            sanitized += c
+        if str(c) in 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-':
+            sanitized += str(c)
     return sanitized
