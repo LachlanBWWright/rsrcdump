@@ -1,10 +1,14 @@
 from os import PathLike
+from typing import List
 
-from rsrcdump.resfork import InvalidResourceFork, ResourceFork
-from rsrcdump.adf import unpack_adf, ADF_ENTRYNUM_RESOURCEFORK, pack_adf, NotADFError
-from rsrcdump.jsonio import resource_fork_to_json_file, json_to_resource_fork
-from rsrcdump.textio import set_global_encoding, parse_type_name
-from rsrcdump.resconverters import standard_converters, StructConverter, Base16Converter
+from rsrcdump.textio import parse_type_name
+from rsrcdump.resfork import ResourceFork
+from rsrcdump.adf import unpack_adf, ADF_ENTRYNUM_RESOURCEFORK, NotADFError
+from rsrcdump.jsonio import json_to_resource_fork
+from rsrcdump.resconverters import standard_converters, StructConverter
+from rsrcdump.adf import unpack_adf, ADF_ENTRYNUM_RESOURCEFORK, NotADFError
+from rsrcdump.jsonio import resource_fork_to_json, json_to_resource_fork
+from rsrcdump.resconverters import standard_converters, StructConverter
 
 
 def load(data_or_path: bytes | PathLike) -> ResourceFork:
@@ -22,3 +26,40 @@ def load(data_or_path: bytes | PathLike) -> ResourceFork:
     except NotADFError:
         fork = ResourceFork.from_bytes(data)
     return fork
+
+def save_to_json(
+        bytes: bytes, #The bytes to be parsed
+        struct_specs: list[str] = [],
+        include_types: list[str] = [], #Only include resources of these types (All if empty)
+        exclude_types: list[str] = [], #Skip resources of these types
+):
+    return resource_fork_to_json(
+        ResourceFork.from_bytes(bytes),
+        [parse_type_name(x) for x in include_types],
+        [parse_type_name(x) for x in exclude_types],
+        _get_converters(struct_specs),
+        {} #TODO: Metadata not implemented
+    )
+
+
+
+def load_from_json(
+        json_blob: dict,
+        struct_specs: list[str] = [],
+        only_types: list[str] = [],
+        skip_types: list[str] = []
+):
+    return json_to_resource_fork(
+        json_blob,
+        _get_converters(struct_specs),
+        [parse_type_name(x) for x in only_types],
+        [parse_type_name(x) for x in skip_types],
+    )
+
+def _get_converters(struct_specs: List[str]):
+    converters = standard_converters.copy()
+    for template_arg in struct_specs:
+        converter, restype = StructConverter.from_template_string_with_typename(template_arg)
+        if converter and restype:
+            converters[restype] = converter
+    return converters
