@@ -188,7 +188,7 @@ class TemplateConverter(ResourceConverter):
 class FileDumper(ResourceConverter):
     preprocess: Callable[[bytes], bytes] | None
 
-    def __init__(self, extension: str, preprocess: Callable[[bytes], bytes]=None) -> None:
+    def __init__(self, extension: str, preprocess: Callable[[bytes], bytes] | None = None) -> None:
         super().__init__(extension)
         self.preprocess = preprocess
 
@@ -217,6 +217,8 @@ class IconConverter(ResourceConverter):
         elif res.type in [b'ics8', b'ics4', b'ics#']:
             width, height = 16, 16
             bw_icon_type = b'ics#'
+        else:
+            raise ValueError(f"Unsupported icon type: {res.type_str}")
 
         color_icon = res.data
 
@@ -234,6 +236,8 @@ class IconConverter(ResourceConverter):
             image = convert_4bit_icon_to_bgra(color_icon, bw_mask, width, height)
         elif res.type in [b'ICN#', b'ics#']:
             image = convert_1bit_icon_to_bgra(color_icon, bw_mask, width, height)
+        else:
+            raise ValueError(f"Unsupported icon type: {res.type_str}")
 
         return pack_png(image, width, height)
 

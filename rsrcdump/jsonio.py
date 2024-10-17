@@ -17,7 +17,7 @@ class JSONEncoderBase16Fallback(json.JSONEncoder):
             return JSONEncoderBase16Fallback(self, o)
 
 
-def resource_fork_to_json(
+def resource_fork_to_json_file(
         fork: ResourceFork,
         outpath: str,
         include_types: list[bytes] = [],
@@ -116,6 +116,65 @@ def resource_fork_to_json(
 
     return len(errors)
 
+def resource_fork_to_json(
+        fork: ResourceFork,
+        include_types: list[bytes] = [],
+        exclude_types: list[bytes] = [],
+        converters: dict[bytes, ResourceConverter] = {},
+        metadata: Any = None,
+        quiet: bool = False,
+) -> str:
+
+    json_blob: dict = {'_metadata': {
+        'junk1': fork.junk_nextresmap,
+        'junk2': fork.junk_filerefnum,
+        'file_attributes': fork.file_attributes
+    }}
+
+    if metadata:
+        json_blob['_metadata'].update(metadata)
+
+    for res_type, res_dir in fork.tree.items():
+        res_type_key = res_type.decode(get_global_encoding(), 'backslashreplace')
+
+        if res_type in exclude_types:
+            continue
+        if include_types and res_type not in include_types:
+            continue
+
+        json_blob[res_type_key] = {}
+
+        converter = converters.get(res_type, Base16Converter())
+
+        for res_id, res in res_dir.items():
+            if not quiet:
+                print(F"{res.type_str:4} {res.num:6} {len(res.data):8}  {res.name_str}")
+
+            wrapper: dict[str, Any] = {}
+
+            if res.name:
+                wrapper['name'] = res.name_str
+
+            if res.flags != 0:
+                wrapper['flags'] = res.flags
+
+            if res.junk != 0:
+                wrapper['junk'] = res.junk
+
+            if res.order != 0xFFFFFFFF:
+                wrapper['order'] = res.order
+
+            try:
+                obj = converter.unpack(res, fork)
+            except BaseException as convert_exception:
+                wrapper['conversion_error'] = str(convert_exception)
+                # Fall back to base16
+                obj = Base16Converter().unpack(res, fork)
+
+            wrapper[converter.json_key] = obj
+
+            json_blob[res_type_key][res_id] = wrapper
+    return json.dumps(json_blob, indent='\t', cls=JSONEncoderBase16Fallback)
 
 def json_to_resource_fork(
         json_blob: dict,

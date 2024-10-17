@@ -2,7 +2,7 @@ from os import PathLike
 
 from rsrcdump.resfork import InvalidResourceFork, ResourceFork
 from rsrcdump.adf import unpack_adf, ADF_ENTRYNUM_RESOURCEFORK, pack_adf, NotADFError
-from rsrcdump.jsonio import resource_fork_to_json, json_to_resource_fork
+from rsrcdump.jsonio import resource_fork_to_json_file, json_to_resource_fork
 from rsrcdump.textio import set_global_encoding, parse_type_name
 from rsrcdump.resconverters import standard_converters, StructConverter, Base16Converter
 

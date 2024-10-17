@@ -6,7 +6,7 @@ import argparse
 
 from rsrcdump.resfork import InvalidResourceFork, ResourceFork
 from rsrcdump.adf import unpack_adf, ADF_ENTRYNUM_RESOURCEFORK, pack_adf, NotADFError
-from rsrcdump.jsonio import resource_fork_to_json, json_to_resource_fork
+from rsrcdump.jsonio import resource_fork_to_json_file, json_to_resource_fork
 from rsrcdump.textio import set_global_encoding, parse_type_name
 from rsrcdump.resconverters import standard_converters, StructConverter, Base16Converter
 
@@ -102,22 +102,11 @@ def main():
             converters[restype] = converter
 
 
-    def load_resmap():
-        with open(inpath, 'rb') as file:
-            data = file.read()
 
-        try:
-            adf_entries = unpack_adf(data)
-            adf_resfork = adf_entries[ADF_ENTRYNUM_RESOURCEFORK]
-            fork = ResourceFork.from_bytes(adf_resfork)
-            return fork, adf_entries
-        except NotADFError:
-            fork = ResourceFork.from_bytes(data)
-            return fork, []
 
 
     def do_list():
-        fork, adf_entries = load_resmap()
+        fork, adf_entries = load_resmap(inpath)
         print(F"{'Type':4} {'ID':6} {'Size':8}  {'Name'}")
         print(F"{'-'*4} {'-'*6} {'-'*8}  {'-'*32}")
         for res_type in fork.tree:
@@ -140,7 +129,7 @@ def main():
             outpath = os.path.join(os.getcwd(), stem + ".json")
             outpath = outpath.removeprefix("._")
 
-        fork, adf_entries = load_resmap()
+        fork, adf_entries = load_resmap(inpath)
 
         metadata = {}
 
@@ -150,13 +139,13 @@ def main():
             for adf_entry_num, adf_entry in adf_entries.items():
                 metadata["adf"][adf_entry_num] = base64.b16encode(adf_entry).decode("ascii")
 
-        return resource_fork_to_json(
+        return resource_fork_to_json_file(
             fork,
             outpath,
             only_types,
             skip_types,
-            converters=converters,
-            metadata=metadata)
+            converters,
+            metadata)
 
 
     def do_pack():
@@ -224,3 +213,16 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+def load_resmap(inpath: str):
+    with open(inpath, 'rb') as file:
+        data = file.read()
+
+    try:
+        adf_entries = unpack_adf(data)
+        adf_resfork = adf_entries[ADF_ENTRYNUM_RESOURCEFORK]
+        fork = ResourceFork.from_bytes(adf_resfork)
+        return fork, adf_entries
+    except NotADFError:
+        fork = ResourceFork.from_bytes(data)
+        return fork, []

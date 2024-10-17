@@ -7,7 +7,7 @@ class StructTemplate:
     format: str
     record_length: int
     field_formats: list[str]
-    field_names: list[str]
+    field_names: list[str | None]
     is_list: bool
 
     @staticmethod
@@ -29,12 +29,11 @@ class StructTemplate:
         repeat = 0
 
         for c in fmt:
-            if c.isspace():
+            #Ignore redundant values
+            if c.isspace() or c in "@!><=":
                 continue
 
-            elif c in "@!><=":
-                continue
-
+            #Calculate repeat count
             elif c in "0123456789":
                 if repeat != 0:
                     repeat *= 10
@@ -77,7 +76,10 @@ class StructTemplate:
             user_field_names_i = 0
             for field_number, field_format in enumerate(StructTemplate.split_struct_format_fields(fmt)):
                 fallback = f".field{field_number}"
-                if user_field_names_i < len(user_field_names):
+
+                if field_format == "x":
+                    name =  None
+                elif user_field_names_i < len(user_field_names):
                     name = user_field_names[user_field_names_i]
                     if not name:
                         name = fallback
@@ -96,7 +98,8 @@ class StructTemplate:
             assert len(self.field_names) == len(values)
             record = {}
             for name, value in zip(self.field_names, values):
-                record[name] = value
+                if name is not None:
+                    record[name] = value
             return record
 
         elif self.is_scalar:
