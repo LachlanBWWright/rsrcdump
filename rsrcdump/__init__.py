@@ -1,6 +1,7 @@
 from os import PathLike
 from typing import List
 
+from rsrcdump.__main__ import adf_resource_fork_to_bytes, resource_fork_to_bytes
 from rsrcdump.textio import parse_type_name
 from rsrcdump.resfork import ResourceFork
 from rsrcdump.adf import unpack_adf, ADF_ENTRYNUM_RESOURCEFORK, NotADFError
@@ -50,19 +51,25 @@ def save_to_json(
 
 
 
-def load_from_json(
+def load_bytes_from_json(
         json_blob: dict,
         struct_specs: list[str] = [],
         only_types: list[str] = [],
-        skip_types: list[str] = []
+        skip_types: list[str] = [],
+        adf: bool = True,
 ):
-
-    return json_to_resource_fork(
+    fork = json_to_resource_fork(
         json_blob,
         _get_converters(struct_specs),
         [parse_type_name(x) for x in only_types],
         [parse_type_name(x) for x in skip_types],
     )
+
+    if adf:
+        return adf_resource_fork_to_bytes(fork, json_blob)
+    return resource_fork_to_bytes(fork)
+
+
 
 def _get_converters(struct_specs: List[str]):
     converters = standard_converters.copy()
@@ -70,4 +77,5 @@ def _get_converters(struct_specs: List[str]):
         converter, restype = StructConverter.from_template_string_with_typename(template_arg)
         if converter and restype:
             converters[restype] = converter
+
     return converters

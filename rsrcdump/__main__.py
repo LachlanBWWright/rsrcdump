@@ -172,20 +172,10 @@ def main():
             #encoding=args.encoding
         )
 
-        binary_fork = fork.pack()
-
         if args.no_adf:
-            output_blob = binary_fork
+            output_blob = resource_fork_to_bytes(fork)
         else:
-            adf_entries = {}
-            try:
-                adf_metadata = json_blob['_metadata']['adf']
-                for adf_entry_id, adf_entry_blob in adf_metadata.items():
-                    adf_entries[int(adf_entry_id)] = base64.b16decode(adf_entry_blob)
-            except KeyError:
-                pass
-            adf_entries[ADF_ENTRYNUM_RESOURCEFORK] = binary_fork
-            output_blob = pack_adf(adf_entries)
+            output_blob = adf_resource_fork_to_bytes(fork, json_blob)
 
         with open(outpath, "wb") as output_file:
             output_file.write(output_blob)
@@ -227,3 +217,20 @@ def load_resmap(inpath: str) -> tuple[ResourceFork, dict[int, bytes]]:
     except NotADFError:
         fork = ResourceFork.from_bytes(data)
         return fork, {}
+
+
+def resource_fork_to_bytes(fork: ResourceFork) -> bytes:
+    return fork.pack()
+        
+def adf_resource_fork_to_bytes(fork: ResourceFork, json_blob: dict) -> bytes:
+    binary_fork = fork.pack()
+    adf_entries = {}
+
+    try:
+        adf_metadata = json_blob['_metadata']['adf']
+        for adf_entry_id, adf_entry_blob in adf_metadata.items():
+            adf_entries[int(adf_entry_id)] = base64.b16decode(adf_entry_blob)
+    except KeyError:
+        pass
+    adf_entries[ADF_ENTRYNUM_RESOURCEFORK] = binary_fork
+    return pack_adf(adf_entries)
