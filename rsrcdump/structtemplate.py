@@ -78,7 +78,7 @@ class StructTemplate:
                 fallback = f".field{field_number}"
 
                 if field_format == "x":
-                    name =  None
+                    continue
                 elif user_field_names_i < len(user_field_names):
                     name = user_field_names[user_field_names_i]
                     if not name:
@@ -129,7 +129,10 @@ class StructTemplate:
                 return _field_value
 
         if self.is_scalar:
-            assert not isinstance(json_obj, list) and not isinstance(json_obj, dict)
+            try:
+                assert not isinstance(json_obj, list) and not isinstance(json_obj, dict)
+            except:
+                raise ValueError("json_obj must not be a list or dict {json_obj}")
             value = process_json_field(self.field_formats[0], json_obj)
             return struct.pack(self.format, value)
 
