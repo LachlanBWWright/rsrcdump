@@ -70,6 +70,36 @@ class StructTemplate:
         self.is_list = is_list
         self.is_scalar = len(self.field_formats) == 1
 
+        #Expand field name macros
+        new_field_names = []
+            #Allow for repeater field names
+        for field in user_field_names:
+            if field is None:
+                new_field_names.append(None)
+                continue
+            #Muti-field macro
+            if field.endswith("]"):
+                #Find number between '[' and ']'
+                index_pos = field.find('[')
+                if index_pos == -1:
+                    #Invalid, just add as-is
+                    new_field_names.append(field)
+                    continue
+
+                repeat_count = int(field[index_pos+1:field.rfind(']')])
+                field = field[:index_pos]
+
+                field_values = field.split("`")
+
+                for i in range(repeat_count):
+                    for field in field_values:
+                        new_field_names.append(f"{field}_{i}")
+            else:
+                #Otherwise, add normally
+                new_field_names.append(field)
+    
+        user_field_names = new_field_names
+
         # Make field names match amount of fields in fmt
         self.field_names = []
         if user_field_names:
@@ -94,6 +124,9 @@ class StructTemplate:
 
     def tag_values(self, values: tuple):
         if self.field_names:
+            if len(self.field_names) != len(values):
+                raise ValueError(f"Number of field names ({len(self.field_names)}) does not match number of values ({len(values)}) {self.field_names} {values}")
+
             # We have some field names: return name-tagged values in a dict
             assert len(self.field_names) == len(values)
             record = {}
