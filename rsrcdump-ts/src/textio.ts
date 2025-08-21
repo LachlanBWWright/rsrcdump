@@ -5,15 +5,23 @@ export function sanitizeTypeName(restype: Uint8Array): string {
     throw new Error(`restype isn't 4 bytes`);
   }
   
-  // Remove trailing spaces if not all spaces
-  let trimmed = restype;
-  if (!isAllSpaces(restype)) {
-    while (trimmed.length > 0 && trimmed[trimmed.length - 1] === 0x20) {
-      trimmed = trimmed.slice(0, -1);
+  // Convert bytes to string, treating as raw bytes
+  let result = '';
+  for (let i = 0; i < restype.length; i++) {
+    const byte = restype[i];
+    if (byte >= 32 && byte <= 126) { // printable ASCII
+      result += String.fromCharCode(byte);
+    } else {
+      result += encodeURIComponent(String.fromCharCode(byte));
     }
   }
   
-  return encodeURIComponent(new TextDecoder('utf-8').decode(trimmed));
+  // Remove trailing spaces but keep them if they're all spaces
+  if (!isAllSpaces(restype)) {
+    result = result.replace(/%20+$/, '');
+  }
+  
+  return result;
 }
 
 export function parseTypeName(saneName: string): Uint8Array {

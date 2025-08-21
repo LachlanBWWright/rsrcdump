@@ -33,14 +33,14 @@ export class StructConverter implements ResourceConverter {
       return [null, null];
     }
 
-    const split = trimmed.split(':', 2);
+    const split = trimmed.split(':', 3);
     if (split.length < 2) {
       throw new Error('Invalid template format');
     }
 
     const restype = parseTypeName(split[0]);
-    const formatstr = split[1];
-    const template = StructTemplateParser.fromTemplateString(formatstr);
+    const formatAndFields = split.slice(1).join(':'); // Rejoin format and fields
+    const template = StructTemplateParser.fromTemplateString(formatAndFields);
     
     return [new StructConverter(template), restype];
   }

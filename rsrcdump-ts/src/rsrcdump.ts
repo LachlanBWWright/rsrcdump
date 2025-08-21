@@ -5,9 +5,22 @@ import { ResourceForkParser } from './resfork.js';
 import { resourceForkToJson } from './jsonio.js';
 import { StructConverter, standardConverters } from './resconverters.js';
 import { parseTypeName } from './textio.js';
+import { unpackAdf, NotADFError, ADF_ENTRYNUM_RESOURCEFORK } from './adf.js';
 
 export function load(data: Uint8Array): ResourceFork {
-  return ResourceForkParser.fromBytes(data);
+  try {
+    const adfEntries = unpackAdf(data);
+    const adfResfork = adfEntries.get(ADF_ENTRYNUM_RESOURCEFORK);
+    if (!adfResfork) {
+      throw new Error('No resource fork found in ADF');
+    }
+    return ResourceForkParser.fromBytes(adfResfork);
+  } catch (error) {
+    if (error instanceof NotADFError) {
+      return ResourceForkParser.fromBytes(data);
+    }
+    throw error;
+  }
 }
 
 export function saveToJson(

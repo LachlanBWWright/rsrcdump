@@ -47,6 +47,7 @@ describe('TypeScript rsrcdump', () => {
     
     // Check header values
     const header = parsed.Hedr['1000'].obj;
+    expect(header).toBeDefined();
     expect(header.version).toBe(134217728);
     expect(header.mapWidth).toBe(176);
     expect(header.mapHeight).toBe(176);
