@@ -34,7 +34,10 @@ describe('TypeScript rsrcdump', () => {
     
     const jsonStr = saveToJson(
       data,
-      ottoMaticSpecs
+      [], // No additional struct specs
+      [], // No include types filter
+      [], // No exclude types filter  
+      true // Use otto specs
     );
     
     // Parse the JSON to ensure it's valid
@@ -84,7 +87,7 @@ describe('TypeScript rsrcdump', () => {
     // This test will compare the outputs from Python and TypeScript
     const data = readFileSync(testFile);
     
-    const tsJsonStr = saveToJson(data, ottoMaticSpecs);
+    const tsJsonStr = saveToJson(data);
     const tsParsed = JSON.parse(tsJsonStr);
     
     // Try to read Python output if it exists

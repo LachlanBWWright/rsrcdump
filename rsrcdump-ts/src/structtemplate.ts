@@ -129,15 +129,64 @@ export class StructTemplateParser {
   private expandFieldNames(fields: string[]): (string | null)[] {
     const result: (string | null)[] = [];
     let fieldNameIndex = 0;
+    let fieldIndex = 0;
     
-    for (let i = 0; i < fields.length; i++) {
-      if (fieldNameIndex < this.fieldNames.length) {
-        const name = this.fieldNames[fieldNameIndex];
-        result.push(name || null);
+    while (fieldIndex < fields.length && fieldNameIndex < this.fieldNames.length) {
+      const field = fields[fieldIndex];
+      const fieldName = this.fieldNames[fieldNameIndex];
+      
+      // Skip 'x' (padding) fields - they should be ignored completely  
+      if (field === 'x') {
+        result.push(null);
+        fieldIndex++;
+        continue;
+      }
+      
+      // Handle array expansion like x`y[100] -> x_0, y_0, x_1, y_1, ... x_99, y_99
+      if (fieldName && fieldName.includes('[') && fieldName.includes(']')) {
+        const expandedNames = this.expandArrayFieldNames(fieldName, fieldIndex, fields);
+        result.push(...expandedNames);
+        fieldIndex += expandedNames.length;
         fieldNameIndex++;
       } else {
-        result.push(null);
+        result.push(fieldName || null);
+        fieldIndex++;
+        fieldNameIndex++;
       }
+    }
+    
+    // Fill remaining fields with null
+    while (fieldIndex < fields.length) {
+      result.push(null);
+      fieldIndex++;
+    }
+    
+    return result;
+  }
+
+  private expandArrayFieldNames(fieldName: string, startFieldIndex: number, fields: string[]): string[] {
+    // Handle patterns like x`y[100] which should expand to x_0, y_0, x_1, y_1, ...
+    const match = fieldName.match(/^(.+?)`(.+?)\[(\d+)\]$/);
+    if (!match) {
+      return [fieldName]; // Not an array pattern
+    }
+    
+    const [, prefix, suffix, countStr] = match;
+    const count = parseInt(countStr);
+    
+    // Count how many consecutive non-x fields we have starting from startFieldIndex
+    let availableFields = 0;
+    for (let i = startFieldIndex; i < fields.length && fields[i] !== 'x'; i++) {
+      availableFields++;
+    }
+    
+    // Generate pairs: x_0, y_0, x_1, y_1, ... up to the available field count
+    const result: string[] = [];
+    const numPairs = Math.min(count, Math.floor(availableFields / 2));
+    
+    for (let i = 0; i < numPairs; i++) {
+      result.push(`${prefix}_${i}`);
+      result.push(`${suffix}_${i}`);
     }
     
     return result;
@@ -194,7 +243,11 @@ export class StructTemplateParser {
           values.push(view.getFloat64(pos, false));
           pos += 8;
           break;
-        case 'x': // pad byte
+        case 'x': // pad byte - read but don't include in output
+          view.getUint8(pos); // Read but discard
+          values.push(null); // Placeholder for ignored field
+          pos += 1;
+          break;
         case '?': // bool (treat as byte for now)
           values.push(view.getUint8(pos));
           pos += 1;
@@ -258,8 +311,14 @@ export class StructTemplateParser {
     
     const result: any = {};
     
-    for (let i = 0; i < values.length; i++) {
-      const fieldName = template.fieldNames[i] || `.field${i}`;
+    for (let i = 0; i < values.length && i < template.fieldNames.length; i++) {
+      const fieldName = template.fieldNames[i];
+      
+      // Skip fields that should be ignored (null fieldName means 'x' padding field)
+      if (fieldName === null) {
+        continue;
+      }
+      
       result[fieldName] = values[i];
     }
     
