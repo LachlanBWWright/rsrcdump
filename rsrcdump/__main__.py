@@ -10,6 +10,19 @@ from rsrcdump.jsonio import resource_fork_to_json_file, json_to_resource_fork
 from rsrcdump.textio import set_global_encoding, parse_type_name
 from rsrcdump.resconverters import standard_converters, StructConverter, Base16Converter
 
+def load_resmap(inpath: str) -> tuple[ResourceFork, dict[int, bytes]]:
+    with open(inpath, 'rb') as file:
+        data = file.read()
+
+    try:
+        adf_entries = unpack_adf(data)
+        adf_resfork = adf_entries[ADF_ENTRYNUM_RESOURCEFORK]
+        fork = ResourceFork.from_bytes(adf_resfork)
+        return fork, adf_entries
+    except NotADFError:
+        fork = ResourceFork.from_bytes(data)
+        return fork, {}
+
 def main():
     description = (
         "Extract resources from a Macintosh resource fork. "
@@ -204,19 +217,6 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-def load_resmap(inpath: str) -> tuple[ResourceFork, dict[int, bytes]]:
-    with open(inpath, 'rb') as file:
-        data = file.read()
-
-    try:
-        adf_entries = unpack_adf(data)
-        adf_resfork = adf_entries[ADF_ENTRYNUM_RESOURCEFORK]
-        fork = ResourceFork.from_bytes(adf_resfork)
-        return fork, adf_entries
-    except NotADFError:
-        fork = ResourceFork.from_bytes(data)
-        return fork, {}
 
 
 def resource_fork_to_bytes(fork: ResourceFork) -> bytes:

@@ -40,7 +40,7 @@ class StructTemplate:
                 repeat += ord(c) - ord('0')
                 continue
 
-            elif c.upper() in "CB?HILFQD" or c == 'x':
+            elif c.upper() in "CB?HILFQD" or c == 'x' or c == '?':
                 for _ in range(max(repeat, 1)):
                     yield c
                 repeat = 0
@@ -53,16 +53,16 @@ class StructTemplate:
                 raise ValueError(f"Unsupported struct format character '{c}'")
 
     def __init__(self, fmt: str, user_field_names: list[str]):
-        if not fmt.startswith(("!", ">", "<", "@", "=")):
-            # struct.unpack needs to know what endianness to work in; default to big-endian
-            fmt = ">" + fmt
-
         if fmt.endswith("+"):
             # "+" suffix specifies that the resource is a list of records
             is_list = True
             fmt = fmt.removesuffix("+")
         else:
             is_list = False
+
+        if not fmt.startswith(("!", ">", "<", "@", "=")):
+            # struct.unpack needs to know what endianness to work in; default to big-endian
+            fmt = ">" + fmt
 
         self.field_formats = list(StructTemplate.split_struct_format_fields(fmt))
         self.format = fmt
