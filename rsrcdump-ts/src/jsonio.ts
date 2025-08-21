@@ -18,7 +18,7 @@ export function resourceForkToJson(
     jsonBlob._metadata = {
       junk1: fork.junkNextresmap,
       junk2: fork.junkFilerefnum,
-      fileAttributes: fork.fileAttributes,
+      file_attributes: fork.fileAttributes || 0,
       ...metadata
     };
   }
