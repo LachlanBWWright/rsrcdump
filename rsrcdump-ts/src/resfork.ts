@@ -207,7 +207,7 @@ export class ResourceForkParser {
     view.setUint16(mapPos, fork.junkFilerefnum || 0, false); mapPos += 2;
     view.setUint16(mapPos, fork.fileAttributes || 0, false); mapPos += 2;
     
-    const typeListOffsetInMap = mapPos - mapOffset;
+    const typeListOffsetInMap = 30; // Fixed: type list starts after 30-byte map header
     view.setUint16(mapPos, typeListOffsetInMap, false); mapPos += 2;
     
     const nameListOffsetInMap = typeListOffsetInMap + typeListSize + resourceListSize;
@@ -216,7 +216,7 @@ export class ResourceForkParser {
     // Write type list
     view.setUint16(mapPos, typeCount - 1, false); mapPos += 2; // count - 1
     
-    let currentResourceListOffset = 0;
+    let currentResourceListOffset = typeListSize; // Relative to typeListOffsetInMap
     
     for (const [typeName, typeResources] of fork.resources) {
       // Write type entry (8 bytes)
