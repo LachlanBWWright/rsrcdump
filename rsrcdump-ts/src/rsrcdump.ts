@@ -1,19 +1,22 @@
 // Main API for rsrcdump TypeScript library
 
-import type { ResourceFork, ResourceConverter } from './types.js';
-import { ResourceForkParser } from './resfork.js';
-import { resourceForkToJson } from './jsonio.js';
-import { StructConverter, standardConverters } from './resconverters.js';
-import { parseTypeName } from './textio.js';
-import { unpackAdf, NotADFError, ADF_ENTRYNUM_RESOURCEFORK } from './adf.js';
-import { getDefaultOttoConverters, loadOttoSpecsFromText } from './ottoSpecs.js';
+import type { ResourceFork, ResourceConverter, JsonOutput } from "./types.js";
+import { ResourceForkParser } from "./resfork.js";
+import { resourceForkToJson, jsonToResourceFork } from "./jsonio.js";
+import { StructConverter, standardConverters } from "./resconverters.js";
+import { parseTypeName } from "./textio.js";
+import { unpackAdf, NotADFError, ADF_ENTRYNUM_RESOURCEFORK } from "./adf.js";
+import {
+  getDefaultOttoConverters,
+  loadOttoSpecsFromText,
+} from "./ottoSpecs.js";
 
 export function load(data: Uint8Array): ResourceFork {
   try {
     const adfEntries = unpackAdf(data);
     const adfResfork = adfEntries.get(ADF_ENTRYNUM_RESOURCEFORK);
     if (!adfResfork) {
-      throw new Error('No resource fork found in ADF');
+      throw new Error("No resource fork found in ADF");
     }
     return ResourceForkParser.fromBytes(adfResfork);
   } catch (error) {
@@ -29,16 +32,16 @@ export function saveToJson(
   structSpecs: string[] = [],
   includeTypes: string[] = [],
   excludeTypes: string[] = [],
-  useOttoSpecs: boolean = true
-): string {
+  useOttoSpecs: boolean = true,
+): JsonOutput {
   const fork = load(data);
-  
+
   return resourceForkToJson(
     fork,
     includeTypes.map(parseTypeName),
     excludeTypes.map(parseTypeName),
     getConverters(structSpecs, useOttoSpecs),
-    {}
+    {},
   );
 }
 
@@ -47,39 +50,43 @@ export function saveToJsonWithOttoSpecs(
   ottoSpecsText: string,
   structSpecs: string[] = [],
   includeTypes: string[] = [],
-  excludeTypes: string[] = []
-): string {
+  excludeTypes: string[] = [],
+): JsonOutput {
   const fork = load(data);
-  
+
   const converters = new Map(standardConverters);
-  
+
   // Add otto specs converters
   const ottoConverters = loadOttoSpecsFromText(ottoSpecsText);
   for (const [type, converter] of ottoConverters) {
     converters.set(type, converter);
   }
-  
+
   // Add additional struct specs
   for (const templateArg of structSpecs) {
-    const [converter, restype] = StructConverter.fromTemplateStringWithTypename(templateArg);
+    const [converter, restype] =
+      StructConverter.fromTemplateStringWithTypename(templateArg);
     if (converter && restype) {
-      const typeName = new TextDecoder('utf-8').decode(restype).trim();
+      const typeName = new TextDecoder("utf-8").decode(restype).trim();
       converters.set(typeName, converter);
     }
   }
-  
+
   return resourceForkToJson(
     fork,
     includeTypes.map(parseTypeName),
     excludeTypes.map(parseTypeName),
     converters,
-    {}
+    {},
   );
 }
 
-function getConverters(structSpecs: string[], useOttoSpecs: boolean = true): Map<string, ResourceConverter> {
+function getConverters(
+  structSpecs: string[],
+  useOttoSpecs: boolean = true,
+): Map<string, ResourceConverter> {
   const converters = new Map(standardConverters);
-  
+
   // Add default otto specs converters if requested
   if (useOttoSpecs) {
     const ottoConverters = getDefaultOttoConverters();
@@ -87,23 +94,48 @@ function getConverters(structSpecs: string[], useOttoSpecs: boolean = true): Map
       converters.set(type, converter);
     }
   }
-  
+
   // Add additional struct specs
   for (const templateArg of structSpecs) {
-    const [converter, restype] = StructConverter.fromTemplateStringWithTypename(templateArg);
+    const [converter, restype] =
+      StructConverter.fromTemplateStringWithTypename(templateArg);
     if (converter && restype) {
-      const typeName = new TextDecoder('utf-8').decode(restype).trim();
+      const typeName = new TextDecoder("utf-8").decode(restype).trim();
       converters.set(typeName, converter);
     }
   }
-  
+
   return converters;
 }
 
+export function loadFromJson(
+  jsonData: unknown,
+  structSpecs: string[] = [],
+  useOttoSpecs: boolean = true,
+): ResourceFork {
+  return jsonToResourceFork(
+    jsonData as any,
+    getConverters(structSpecs, useOttoSpecs),
+  );
+}
+
+export function saveToBytes(fork: ResourceFork): Uint8Array {
+  return ResourceForkParser.toBytes(fork);
+}
+
+export function saveFromJson(
+  jsonData: unknown,
+  structSpecs: string[] = [],
+  useOttoSpecs: boolean = true,
+): Uint8Array {
+  const fork = loadFromJson(jsonData, structSpecs, useOttoSpecs);
+  return saveToBytes(fork);
+}
+
 // Re-export types and utilities
-export * from './types.js';
-export * from './textio.js';
-export * from './resfork.js';
-export * from './resconverters.js';
-export * from './structtemplate.js';
-export * from './jsonio.js';
+export * from "./types.js";
+export * from "./textio.js";
+export * from "./resfork.js";
+export * from "./resconverters.js";
+export * from "./structtemplate.js";
+export * from "./jsonio.js";
