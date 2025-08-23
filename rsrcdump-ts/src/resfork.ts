@@ -41,12 +41,14 @@ export class ResourceForkParser {
     const fileAttributes = mapView.getUint16(pos, false); pos += 2;
     const typeListOffsetInMap = mapView.getUint16(pos, false); pos += 2;
     const nameListOffsetInMap = mapView.getUint16(pos, false); pos += 2;
-    let numTypes = mapView.getUint16(pos, false) + 1; pos += 2;
+    
+    // Read type count from the start of the type list
+    let numTypes = mapView.getUint16(typeListOffsetInMap, false) + 1;
     
     const resources = new Map<string, Map<number, Resource>>();
     
-    // Read type list - positioned after the map header
-    pos = typeListOffsetInMap + 2; // skip the count we already read
+    // Read type list - positioned after the count
+    pos = typeListOffsetInMap + 2;
     
     for (let i = 0; i < numTypes; i++) {
       // Read type entry from main map: 4-byte type, 2-byte count, 2-byte offset
@@ -213,19 +215,21 @@ export class ResourceForkParser {
     const nameListOffsetInMap = typeListOffsetInMap + typeListSize + resourceListSize;
     view.setUint16(mapPos, nameListOffsetInMap, false); mapPos += 2;
     
-    // Write type list
-    view.setUint16(mapPos, typeCount - 1, false); mapPos += 2; // count - 1
+    // Write type list - starts at mapOffset + typeListOffsetInMap
+    const typeListStart = mapOffset + typeListOffsetInMap;
+    view.setUint16(typeListStart, typeCount - 1, false); // count - 1
     
     let currentResourceListOffset = typeListSize; // Relative to typeListOffsetInMap
+    let typePos = typeListStart + 2; // Skip the count we just wrote
     
     for (const [typeName, typeResources] of fork.resources) {
       // Write type entry (8 bytes)
       const typeBytes = new TextEncoder().encode(typeName.padEnd(4, '\0').substring(0, 4));
-      bytes.set(typeBytes, mapPos);
-      mapPos += 4;
+      bytes.set(typeBytes, typePos);
+      typePos += 4;
       
-      view.setUint16(mapPos, typeResources.size - 1, false); mapPos += 2; // count - 1
-      view.setUint16(mapPos, currentResourceListOffset, false); mapPos += 2;
+      view.setUint16(typePos, typeResources.size - 1, false); typePos += 2; // count - 1
+      view.setUint16(typePos, currentResourceListOffset, false); typePos += 2;
       
       currentResourceListOffset += typeResources.size * 12;
     }
