@@ -1,6 +1,6 @@
 // JSON input/output handling
 
-import type { ResourceFork, ResourceConverter, JsonOutput, ConvertedResource } from './types.js';
+import type { ResourceFork, ResourceConverter, JsonOutput, ConvertedResource, Resource } from './types.js';
 import { Base16Converter } from './resconverters.js';
 
 export function resourceForkToJson(
@@ -86,4 +86,76 @@ export function resourceForkToJson(
   }
   
   return JSON.stringify(jsonBlob, null, '\t');
+}
+
+export function jsonToResourceFork(
+  jsonString: string, 
+  converters: Map<string, ResourceConverter> = new Map()
+): ResourceFork {
+  const jsonData: JsonOutput = JSON.parse(jsonString);
+  
+  const resources = new Map<string, Map<number, Resource>>();
+  
+  // Extract metadata
+  const metadata = jsonData._metadata || {};
+  const fileAttributes = metadata.fileAttributes || 0;
+  const junkNextresmap = metadata.junk1 || 0;
+  const junkFilerefnum = metadata.junk2 || 0;
+  
+  // Process each resource type
+  for (const [typeName, typeData] of Object.entries(jsonData)) {
+    if (typeName === '_metadata') continue;
+    
+    const typeResources = new Map<number, Resource>();
+    
+    for (const [idStr, resourceData] of Object.entries(typeData as Record<string, ConvertedResource>)) {
+      const id = parseInt(idStr, 10);
+      
+      // Convert resource data back to binary
+      let data: Uint8Array;
+      
+      if (resourceData.obj !== undefined) {
+        // Use converter to pack structured data back to binary
+        const converter = converters.get(typeName);
+        if (converter && converter.pack) {
+          data = converter.pack(resourceData.obj);
+        } else {
+          throw new Error(`No pack function available for resource type ${typeName}`);
+        }
+      } else if (resourceData.data !== undefined) {
+        // Convert hex string back to binary
+        const hexStr = resourceData.data;
+        const bytes = new Uint8Array(hexStr.length / 2);
+        for (let i = 0; i < hexStr.length; i += 2) {
+          bytes[i / 2] = parseInt(hexStr.substr(i, 2), 16);
+        }
+        data = bytes;
+      } else {
+        throw new Error(`Resource ${typeName}:${id} has neither obj nor data field`);
+      }
+      
+      const resource: Resource = {
+        type: typeName,
+        id,
+        data,
+        name: resourceData.name,
+        flags: resourceData.flags || 0,
+        junk: resourceData.junk || 0,
+        order: resourceData.order || 0xFFFFFFFF
+      };
+      
+      typeResources.set(id, resource);
+    }
+    
+    if (typeResources.size > 0) {
+      resources.set(typeName, typeResources);
+    }
+  }
+  
+  return {
+    resources,
+    fileAttributes,
+    junkNextresmap,
+    junkFilerefnum
+  };
 }

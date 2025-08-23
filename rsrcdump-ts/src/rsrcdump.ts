@@ -2,7 +2,7 @@
 
 import type { ResourceFork, ResourceConverter } from './types.js';
 import { ResourceForkParser } from './resfork.js';
-import { resourceForkToJson } from './jsonio.js';
+import { resourceForkToJson, jsonToResourceFork } from './jsonio.js';
 import { StructConverter, standardConverters } from './resconverters.js';
 import { parseTypeName } from './textio.js';
 import { unpackAdf, NotADFError, ADF_ENTRYNUM_RESOURCEFORK } from './adf.js';
@@ -98,6 +98,27 @@ function getConverters(structSpecs: string[], useOttoSpecs: boolean = true): Map
   }
   
   return converters;
+}
+
+export function loadFromJson(
+  jsonString: string,
+  structSpecs: string[] = [],
+  useOttoSpecs: boolean = true
+): ResourceFork {
+  return jsonToResourceFork(jsonString, getConverters(structSpecs, useOttoSpecs));
+}
+
+export function saveToBytes(fork: ResourceFork): Uint8Array {
+  return ResourceForkParser.toBytes(fork);
+}
+
+export function saveFromJson(
+  jsonString: string,
+  structSpecs: string[] = [],
+  useOttoSpecs: boolean = true
+): Uint8Array {
+  const fork = loadFromJson(jsonString, structSpecs, useOttoSpecs);
+  return saveToBytes(fork);
 }
 
 // Re-export types and utilities

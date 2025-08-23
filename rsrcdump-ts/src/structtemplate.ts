@@ -268,7 +268,7 @@ export class StructTemplateParser {
     return this.tagValues(values, template);
   }
 
-  private static splitStructFormatFields(fmt: string): string[] {
+  static splitStructFormatFields(fmt: string): string[] {
     // Remove endianness prefix for field parsing
     const cleanFmt = fmt.replace(/^[!@=<>]/, '');
     const fields: string[] = [];
