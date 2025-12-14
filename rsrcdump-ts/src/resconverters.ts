@@ -1,217 +1,234 @@
-// Resource converters for different resource types
+/**
+ * Resource converters for different resource types
+ */
 
-import type { Resource, ResourceFork, ResourceConverter, StructTemplate } from './types.js';
-import { StructTemplateParser } from './structtemplate.js';
+import { Resource, ResourceFork } from './resfork.js';
+import { StructTemplate, unpackRecord, pack } from './structtemplate.js';
+import { Result, ok, err } from './result.js';
 
+export interface ResourceConverter {
+  separateFile: string;
+  jsonKey: string;
+  unpack(res: Resource, fork: ResourceFork): Result<unknown, string>;
+  pack(obj: unknown): Result<Uint8Array, string>;
+}
+
+/**
+ * Base16 (hex) converter for raw data
+ */
 export class Base16Converter implements ResourceConverter {
-  unpack(resource: Resource, _fork?: ResourceFork): string {
-    return Array.from(resource.data)
-      .map(byte => byte.toString(16).padStart(2, '0'))
-      .join('')
-      .toUpperCase();
+  separateFile = '';
+  jsonKey = 'data';
+
+  unpack(res: Resource, _fork: ResourceFork): Result<string, string> {
+    return ok(Buffer.from(res.data).toString('hex').toUpperCase());
   }
 
-  pack(obj: string): Uint8Array {
+  pack(obj: unknown): Result<Uint8Array, string> {
     if (typeof obj !== 'string') {
-      throw new Error('Expected string for base16 data');
+      return err('Expected string for base16 data');
     }
-    
-    const result = new Uint8Array(obj.length / 2);
-    for (let i = 0; i < obj.length; i += 2) {
-      result[i / 2] = parseInt(obj.substr(i, 2), 16);
+    try {
+      return ok(new Uint8Array(Buffer.from(obj, 'hex')));
+    } catch (e) {
+      return err(`Failed to decode hex: ${e}`);
     }
-    return result;
   }
 }
 
+/**
+ * Struct-based converter using struct templates
+ */
 export class StructConverter implements ResourceConverter {
+  separateFile = '';
+  jsonKey = 'obj';
   private template: StructTemplate;
-
-  static fromTemplateStringWithTypename(templateArg: string): [StructConverter | null, Uint8Array | null] {
-    const trimmed = templateArg.trim();
-    if (!trimmed || trimmed.startsWith('//')) {
-      return [null, null];
-    }
-
-    const split = trimmed.split(':', 3);
-    if (split.length < 2) {
-      throw new Error('Invalid template format');
-    }
-
-    const restype = parseTypeName(split[0]);
-    const formatAndFields = split.slice(1).join(':'); // Rejoin format and fields
-    const template = StructTemplateParser.fromTemplateString(formatAndFields);
-    
-    return [new StructConverter(template), restype];
-  }
 
   constructor(template: StructTemplate) {
     this.template = template;
   }
 
-  unpack(resource: Resource, _fork?: ResourceFork): any {
-    if (this.template.isList) {
-      const result: any[] = [];
-      
-      if (resource.data.length % this.template.recordLength !== 0) {
-        throw new Error(
-          `The length of ${resource.type} ${resource.id} (${resource.data.length} bytes) ` +
-          `isn't a multiple of the struct format for this resource type ` +
-          `(${this.template.recordLength} bytes)`
+  unpack(res: Resource, _fork: ResourceFork): Result<unknown, string> {
+    const template = this.template;
+
+    if (template.isList) {
+      const resObject: unknown[] = [];
+
+      if (res.data.length % template.recordLength !== 0) {
+        return err(
+          `The length of resource (${res.data.length} bytes) ` +
+          `isn't a multiple of the struct format (${template.recordLength} bytes)`
         );
       }
 
-      const numRecords = resource.data.length / this.template.recordLength;
-      for (let i = 0; i < numRecords; i++) {
-        const record = StructTemplateParser.unpackRecord(
-          resource.data, 
-          i * this.template.recordLength, 
-          this.template
-        );
-        result.push(record);
-      }
-      return result;
-    } else {
-      if (resource.data.length !== this.template.recordLength) {
-        throw new Error(
-          `The length of ${resource.type} ${resource.id} (${resource.data.length} bytes) ` +
-          `doesn't match the struct format for this resource type ` +
-          `(${this.template.recordLength} bytes)`
-        );
-      }
-
-      return StructTemplateParser.unpackRecord(resource.data, 0, this.template);
-    }
-  }
-
-  pack(obj: any): Uint8Array {
-    if (this.template.isList) {
-      if (!Array.isArray(obj)) {
-        throw new Error('Expected array for list struct');
-      }
-      
-      const result = new Uint8Array(obj.length * this.template.recordLength);
-      for (let i = 0; i < obj.length; i++) {
-        const record = this.packRecord(obj[i], this.template);
-        result.set(record, i * this.template.recordLength);
-      }
-      return result;
-    } else {
-      return this.packRecord(obj, this.template);
-    }
-  }
-
-  private packRecord(obj: any, template: StructTemplate): Uint8Array {
-    const result = new Uint8Array(template.recordLength);
-    const view = new DataView(result.buffer);
-    const fields = StructTemplateParser.splitStructFormatFields(template.format);
-    
-    let pos = 0;
-    let fieldIndex = 0;
-
-    for (const field of fields) {
-      let value: any;
-      
-      if (fieldIndex < template.fieldNames.length) {
-        const fieldName = template.fieldNames[fieldIndex];
-        if (fieldName !== null) {
-          value = obj[fieldName];
+      for (let i = 0; i < res.data.length / template.recordLength; i++) {
+        const recordResult = unpackRecord(template, res.data, i * template.recordLength);
+        if (!recordResult.ok) {
+          return recordResult;
         }
+        resObject.push(recordResult.value);
       }
-      
-      switch (field) {
-        case 'B': // unsigned char
-          view.setUint8(pos, value || 0);
-          pos += 1;
-          break;
-        case 'b': // signed char
-          view.setInt8(pos, value || 0);
-          pos += 1;
-          break;
-        case 'H': // unsigned short (big-endian)
-          view.setUint16(pos, value || 0, false);
-          pos += 2;
-          break;
-        case 'h': // signed short (big-endian)
-          view.setInt16(pos, value || 0, false);
-          pos += 2;
-          break;
-        case 'I': // unsigned int (big-endian)
-        case 'L': // unsigned long (big-endian)
-          view.setUint32(pos, value || 0, false);
-          pos += 4;
-          break;
-        case 'i': // signed int (big-endian)
-        case 'l': // signed long (big-endian)
-          view.setInt32(pos, value || 0, false);
-          pos += 4;
-          break;
-        case 'f': // float (big-endian)
-          view.setFloat32(pos, value || 0.0, false);
-          pos += 4;
-          break;
-        case 'Q': // unsigned long long (big-endian)
-          view.setBigUint64(pos, BigInt(value || 0), false);
-          pos += 8;
-          break;
-        case 'q': // signed long long (big-endian)
-          view.setBigInt64(pos, BigInt(value || 0), false);
-          pos += 8;
-          break;
-        case 'd': // double (big-endian)
-          view.setFloat64(pos, value || 0.0, false);
-          pos += 8;
-          break;
-        case 'x': // pad byte
-          view.setUint8(pos, 0); // Write padding as zero
-          pos += 1;
-          break;
-        case '?': // bool
-          view.setUint8(pos, value ? 1 : 0);
-          pos += 1;
-          break;
-        default:
-          if (field.endsWith('s')) {
-            // String field
-            const num = parseInt(field.slice(0, -1));
-            const str = (value || '').toString();
-            const encoded = new TextEncoder().encode(str);
-            const toCopy = Math.min(encoded.length, num);
-            result.set(encoded.slice(0, toCopy), pos);
-            pos += num;
-          } else {
-            throw new Error(`Unknown field type: ${field}`);
-          }
+
+      return ok(resObject);
+    } else {
+      if (res.data.length !== template.recordLength) {
+        return err(
+          `The length of resource (${res.data.length} bytes) ` +
+          `doesn't match the struct format (${template.recordLength} bytes)`
+        );
       }
-      
-      // Only increment field index for non-padding fields
-      if (field !== 'x') {
-        fieldIndex++;
-      }
+
+      return unpackRecord(template, res.data, 0);
     }
+  }
+
+  pack(obj: unknown): Result<Uint8Array, string> {
+    return pack(this.template, obj);
+  }
+}
+
+/**
+ * Single string converter for STR resources
+ */
+export class SingleStringConverter implements ResourceConverter {
+  separateFile = '';
+  jsonKey = 'obj';
+
+  unpack(res: Resource, _fork: ResourceFork): Result<string, string> {
+    if (res.data.length === 0) {
+      return ok('');
+    }
+
+    const length = res.data[0]!;
+    const text = res.data.slice(1, 1 + length);
     
-    return result;
+    // Simplified encoding - use latin1 for macroman approximation
+    return ok(Buffer.from(text).toString('latin1'));
+  }
+
+  pack(obj: unknown): Result<Uint8Array, string> {
+    if (typeof obj !== 'string') {
+      return err('Expected string');
+    }
+
+    const encoded = Buffer.from(obj, 'latin1');
+    const length = Math.min(encoded.length, 255);
+    const result = new Uint8Array(1 + length);
+    result[0] = length;
+    result.set(encoded.slice(0, length), 1);
+
+    return ok(result);
   }
 }
 
-// Helper function to parse type names (moved from textio to avoid circular imports)
-function parseTypeName(saneName: string): Uint8Array {
-  const decoded = new TextEncoder().encode(decodeURIComponent(saneName));
-  const result = new Uint8Array(4);
-  result.fill(0x20); // space character
-  
-  for (let i = 0; i < Math.min(decoded.length, 4); i++) {
-    result[i] = decoded[i];
+/**
+ * String list converter for STR# resources
+ */
+export class StringListConverter implements ResourceConverter {
+  separateFile = '';
+  jsonKey = 'obj';
+
+  unpack(res: Resource, _fork: ResourceFork): Result<string[], string> {
+    if (res.data.length < 2) {
+      return ok([]);
+    }
+
+    const view = new DataView(res.data.buffer, res.data.byteOffset);
+    const count = view.getUint16(0, false); // big-endian
+
+    const strings: string[] = [];
+    let offset = 2;
+
+    for (let i = 0; i < count; i++) {
+      if (offset >= res.data.length) {
+        break;
+      }
+
+      const length = res.data[offset]!;
+      offset++;
+
+      if (offset + length > res.data.length) {
+        break;
+      }
+
+      const text = res.data.slice(offset, offset + length);
+      strings.push(Buffer.from(text).toString('latin1'));
+      offset += length;
+    }
+
+    return ok(strings);
   }
-  
-  if (decoded.length > 4) {
-    throw new Error(`decoded restype doesn't work out to 4 bytes`);
+
+  pack(obj: unknown): Result<Uint8Array, string> {
+    if (!Array.isArray(obj)) {
+      return err('Expected array of strings');
+    }
+
+    const buffers: Uint8Array[] = [];
+    const countBuffer = new Uint8Array(2);
+    const view = new DataView(countBuffer.buffer);
+    view.setUint16(0, obj.length, false);
+    buffers.push(countBuffer);
+
+    for (const str of obj) {
+      if (typeof str !== 'string') {
+        return err('Expected string in array');
+      }
+
+      const encoded = Buffer.from(str, 'latin1');
+      const length = Math.min(encoded.length, 255);
+      const strBuffer = new Uint8Array(1 + length);
+      strBuffer[0] = length;
+      strBuffer.set(encoded.slice(0, length), 1);
+      buffers.push(strBuffer);
+    }
+
+    const totalLength = buffers.reduce((sum, buf) => sum + buf.length, 0);
+    const result = new Uint8Array(totalLength);
+    let offset = 0;
+    for (const buf of buffers) {
+      result.set(buf, offset);
+      offset += buf.length;
+    }
+
+    return ok(result);
   }
-  
-  return result;
 }
 
-export const standardConverters: Map<string, ResourceConverter> = new Map([
-  // Add standard converters here as needed
-  // For now we'll focus on struct converters
-]);
+/**
+ * TEXT resource converter
+ */
+export class TextConverter implements ResourceConverter {
+  separateFile = '';
+  jsonKey = 'obj';
+
+  unpack(res: Resource, _fork: ResourceFork): Result<string, string> {
+    return ok(Buffer.from(res.data).toString('latin1'));
+  }
+
+  pack(obj: unknown): Result<Uint8Array, string> {
+    if (typeof obj !== 'string') {
+      return err('Expected string');
+    }
+    return ok(new Uint8Array(Buffer.from(obj, 'latin1')));
+  }
+}
+
+/**
+ * Standard converters for common resource types
+ */
+export function getStandardConverters(): Map<string, ResourceConverter> {
+  const converters = new Map<string, ResourceConverter>();
+
+  // Add standard text converters
+  const strKey = Buffer.from('STR ', 'binary').toString('binary');
+  converters.set(strKey, new SingleStringConverter());
+
+  const strListKey = Buffer.from('STR#', 'binary').toString('binary');
+  converters.set(strListKey, new StringListConverter());
+
+  const textKey = Buffer.from('TEXT', 'binary').toString('binary');
+  converters.set(textKey, new TextConverter());
+
+  return converters;
+}

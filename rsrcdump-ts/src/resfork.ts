@@ -1,284 +1,409 @@
-// Resource fork parsing
+/**
+ * Resource fork data structures and parsing
+ */
 
-import type { Resource, ResourceFork } from './types.js';
-import { sanitizeTypeName } from './textio.js';
+import { Unpacker, Packer, calcsize } from './packutils.js';
+import { decode, sanitizeTypeName, parseTypeName } from './textio.js';
+import { Result, ok, err } from './result.js';
 
-export class ResourceForkParser {
-  static fromBytes(data: Uint8Array): ResourceFork {
-    if (data.length === 0) {
-      return {
-        resources: new Map(),
-        fileAttributes: 0,
-        junkNextresmap: 0,
-        junkFilerefnum: 0
-      };
-    }
+export type ResType = Uint8Array;
 
-    if (data.length < 16) {
-      throw new Error('data is too small to contain a valid resource fork header');
-    }
+export interface Resource {
+  type: ResType;
+  num: number;
+  data: Uint8Array;
+  name: Uint8Array;
+  flags: number;
+  junk: number;
+  order: number;
+}
 
-    const view = new DataView(data.buffer, data.byteOffset);
-    
-    // Read resource header
-    const dataOffset = view.getUint32(0, false);
-    const mapOffset = view.getUint32(4, false);
-    const dataLength = view.getUint32(8, false);
-    const mapLength = view.getUint32(12, false);
-    
-    if (dataOffset + dataLength > data.length || mapOffset + mapLength > data.length) {
-      throw new Error('Invalid resource fork: offsets/lengths in header are nonsense');
-    }
+export interface ResourceFork {
+  tree: Map<string, Map<number, Resource>>;
+  junkNextresmap: number;
+  junkFilerefnum: number;
+  fileAttributes: number;
+}
 
-    // Create views for data and map sections
-    const mapData = new Uint8Array(data.buffer, data.byteOffset + mapOffset, mapLength);
-    const mapView = new DataView(mapData.buffer, mapData.byteOffset);
-    
-    // Read map header - skip copy of resource header (16 bytes)
-    let pos = 16;
-    const junkNextresmap = mapView.getUint32(pos, false); pos += 4;
-    const junkFilerefnum = mapView.getUint16(pos, false); pos += 2;
-    const fileAttributes = mapView.getUint16(pos, false); pos += 2;
-    const typeListOffsetInMap = mapView.getUint16(pos, false); pos += 2;
-    const nameListOffsetInMap = mapView.getUint16(pos, false); pos += 2;
-    
-    // Read type count from the start of the type list
-    let numTypes = mapView.getUint16(typeListOffsetInMap, false) + 1;
-    
-    const resources = new Map<string, Map<number, Resource>>();
-    
-    // Read type list - positioned after the count
-    pos = typeListOffsetInMap + 2;
-    
-    for (let i = 0; i < numTypes; i++) {
-      // Read type entry from main map: 4-byte type, 2-byte count, 2-byte offset
-      const typeBytes = new Uint8Array(mapData.buffer, mapData.byteOffset + pos, 4);
-      const typeName = sanitizeTypeName(typeBytes);
-      const resourceCount = mapView.getUint16(pos + 4, false) + 1;
-      const resourceListOffset = mapView.getUint16(pos + 6, false);
-      
-      pos += 8;
-      
-      const typeResources = new Map<number, Resource>();
-      
-      // Read resources for this type from the resource list
-      let resPos = typeListOffsetInMap + resourceListOffset;
-      
-      for (let j = 0; j < resourceCount; j++) {
-        // Each resource entry is 12 bytes: id(2), nameOffset(2), packedAttr(4), junk(4)
-        const id = mapView.getInt16(resPos, false);
-        const nameOffset = mapView.getUint16(resPos + 2, false);
-        const packedAttr = mapView.getUint32(resPos + 4, false);
-        const junk = mapView.getUint32(resPos + 8, false);
-        
-        resPos += 12;
-        
-        // Unpack attributes
-        const flags = (packedAttr & 0xFF000000) >>> 24;
-        const resourceDataOffset = packedAttr & 0x00FFFFFF;
-        
-        // Read resource data from data section
-        const actualDataOffset = dataOffset + resourceDataOffset;
-        
-        if (actualDataOffset + 4 > data.length) {
-          console.warn(`Skipping resource ${typeName}:${id} - data offset out of bounds`);
-          continue;
-        }
-        
-        const resourceDataLength = view.getUint32(actualDataOffset, false);
-        
-        if (actualDataOffset + 4 + resourceDataLength > data.length) {
-          console.warn(`Skipping resource ${typeName}:${id} - data length out of bounds`);
-          continue;
-        }
-        
-        const resourceData = new Uint8Array(
-          data.buffer,
-          data.byteOffset + actualDataOffset + 4,
-          resourceDataLength
-        );
-        
-        // Read resource name if present
-        let name: string | undefined;
-        if (nameOffset !== 0xFFFF) {
-          const namePos = nameListOffsetInMap + nameOffset;
-          if (namePos < mapLength) {
-            const nameLength = mapData[namePos];
-            if (namePos + 1 + nameLength <= mapLength) {
-              name = new TextDecoder('latin1').decode(
-                mapData.slice(namePos + 1, namePos + 1 + nameLength)
-              );
-            }
-          }
-        }
-        
-        const resource: Resource = {
-          type: typeName,
-          id,
-          data: resourceData,
-          name,
-          flags,
-          junk,
-          order: 0xFFFFFFFF
-        };
-        
-        typeResources.set(id, resource);
-      }
-      
-      if (typeResources.size > 0) {
-        resources.set(typeName, typeResources);
-      }
-    }
-    
-    return {
-      resources,
-      fileAttributes,
-      junkNextresmap,
-      junkFilerefnum
-    };
+export function createResource(
+  type: ResType,
+  num: number,
+  data: Uint8Array,
+  name: Uint8Array = new Uint8Array(0),
+  flags: number = 0,
+  junk: number = 0,
+  order: number = 0xFFFFFFFF
+): Resource {
+  return { type, num, data, name, flags, junk, order };
+}
+
+export function createResourceFork(): ResourceFork {
+  return {
+    tree: new Map(),
+    junkNextresmap: 0,
+    junkFilerefnum: 0,
+    fileAttributes: 0,
+  };
+}
+
+export function resourceDesc(res: Resource): string {
+  return `${sanitizeTypeName(res.type)}#${res.num}`;
+}
+
+export function resourceTypeStr(res: Resource): string {
+  return decode(res.type, 'replace');
+}
+
+export function resourceNameStr(res: Resource): string {
+  return decode(res.name, 'replace');
+}
+
+/**
+ * Parses a resource fork from bytes
+ */
+export function resourceForkFromBytes(data: Uint8Array): Result<ResourceFork, string> {
+  if (data.length === 0) {
+    return ok(createResourceFork());
   }
 
-  static toBytes(fork: ResourceFork): Uint8Array {
-    // Calculate sizes and build the resource fork binary data
-    
-    // First pass: calculate required space
-    let dataSize = 0;
-    let nameSize = 0;
-    let resourceCount = 0;
-    
-    for (const [, typeResources] of fork.resources) {
-      resourceCount += typeResources.size;
-      for (const [, resource] of typeResources) {
-        dataSize += 4 + resource.data.length; // 4 bytes for length + data
-        if (resource.name) {
-          nameSize += 1 + resource.name.length; // 1 byte for length + name
-        }
-      }
-    }
-    
-    // Calculate offsets and sizes
-    const typeCount = fork.resources.size;
-    const resourceListSize = resourceCount * 12; // 12 bytes per resource entry
-    const typeListSize = 2 + (typeCount * 8); // 2 bytes count + 8 bytes per type
-    const mapHeaderSize = 30; // Fixed map header size
-    
-    const dataOffset = 16; // After resource header
-    const mapOffset = dataOffset + dataSize;
-    const mapSize = mapHeaderSize + typeListSize + resourceListSize + nameSize;
-    
-    const totalSize = dataOffset + dataSize + mapSize;
-    const buffer = new ArrayBuffer(totalSize);
-    const view = new DataView(buffer);
-    const bytes = new Uint8Array(buffer);
-    
-    // Write resource header (16 bytes)
-    view.setUint32(0, dataOffset, false);   // data offset
-    view.setUint32(4, mapOffset, false);    // map offset
-    view.setUint32(8, dataSize, false);     // data length
-    view.setUint32(12, mapSize, false);     // map length
-    
-    // Write resource data section
-    let dataPos = dataOffset;
-    const resourceOffsets = new Map<string, Map<number, number>>();
-    
-    for (const [typeName, typeResources] of fork.resources) {
-      const typeOffsets = new Map<number, number>();
-      for (const [id, resource] of typeResources) {
-        const offset = dataPos - dataOffset; // Relative to data section start
-        typeOffsets.set(id, offset);
-        
-        view.setUint32(dataPos, resource.data.length, false);
-        dataPos += 4;
-        bytes.set(resource.data, dataPos);
-        dataPos += resource.data.length;
-      }
-      resourceOffsets.set(typeName, typeOffsets);
-    }
-    
-    // Write map header (30 bytes)
-    let mapPos = mapOffset;
-    
-    // Copy of resource header (16 bytes)
-    view.setUint32(mapPos, dataOffset, false); mapPos += 4;
-    view.setUint32(mapPos, mapOffset, false); mapPos += 4;
-    view.setUint32(mapPos, dataSize, false); mapPos += 4;
-    view.setUint32(mapPos, mapSize, false); mapPos += 4;
-    
-    // Map-specific header (14 bytes)
-    view.setUint32(mapPos, fork.junkNextresmap || 0, false); mapPos += 4;
-    view.setUint16(mapPos, fork.junkFilerefnum || 0, false); mapPos += 2;
-    view.setUint16(mapPos, fork.fileAttributes || 0, false); mapPos += 2;
-    
-    const typeListOffsetInMap = 30; // Fixed: type list starts after 30-byte map header
-    view.setUint16(mapPos, typeListOffsetInMap, false); mapPos += 2;
-    
-    const nameListOffsetInMap = typeListOffsetInMap + typeListSize + resourceListSize;
-    view.setUint16(mapPos, nameListOffsetInMap, false); mapPos += 2;
-    
-    // Write type list - starts at mapOffset + typeListOffsetInMap
-    const typeListStart = mapOffset + typeListOffsetInMap;
-    view.setUint16(typeListStart, typeCount - 1, false); // count - 1
-    
-    let currentResourceListOffset = typeListSize; // Relative to typeListOffsetInMap
-    let typePos = typeListStart + 2; // Skip the count we just wrote
-    
-    for (const [typeName, typeResources] of fork.resources) {
-      // Write type entry (8 bytes)
-      const typeBytes = new TextEncoder().encode(typeName.padEnd(4, '\0').substring(0, 4));
-      bytes.set(typeBytes, typePos);
-      typePos += 4;
-      
-      view.setUint16(typePos, typeResources.size - 1, false); typePos += 2; // count - 1
-      view.setUint16(typePos, currentResourceListOffset, false); typePos += 2;
-      
-      currentResourceListOffset += typeResources.size * 12;
-    }
-    
-    // Write resource lists and collect names
-    const nameData: { offset: number; name: string }[] = [];
-    let nameOffset = 0;
-    
-    // Calculate where resource list starts (after type list)
-    const resourceListStart = mapOffset + typeListOffsetInMap + typeListSize;
-    let resourceListPos = 0;
-    
-    for (const [typeName, typeResources] of fork.resources) {
-      const typeOffsets = resourceOffsets.get(typeName)!;
-      
-      for (const [id, resource] of typeResources) {
-        const dataOffsetValue = typeOffsets.get(id)!;
-        
-        // Write resource entry (12 bytes) at absolute position
-        const entryPos = resourceListStart + resourceListPos;
-        
-        view.setInt16(entryPos, id, false);
-        
-        let nameOffsetInList = 0xFFFF;
-        if (resource.name) {
-          nameOffsetInList = nameOffset;
-          nameData.push({ offset: nameOffset, name: resource.name });
-          nameOffset += 1 + resource.name.length;
-        }
-        view.setUint16(entryPos + 2, nameOffsetInList, false);
-        
-        const packedAttr = ((resource.flags || 0) << 24) | (dataOffsetValue & 0x00FFFFFF);
-        view.setUint32(entryPos + 4, packedAttr, false);
-        view.setUint32(entryPos + 8, resource.junk || 0, false);
-        
-        resourceListPos += 12;
-      }
-    }
-    
-    // Write name list
-    let namePos = mapOffset + nameListOffsetInMap;
-    for (const { name } of nameData) {
-      bytes[namePos] = name.length;
-      namePos += 1;
-      const nameBytes = new TextEncoder().encode(name);
-      bytes.set(nameBytes, namePos);
-      namePos += nameBytes.length;
-    }
-    
-    return bytes;
+  const fork = createResourceFork();
+
+  const headerSize = calcsize('>LLLL16x');
+  if (data.length < headerSize) {
+    return err('data is too small to contain a valid resource fork header');
   }
+
+  const u = new Unpacker(data);
+  const header = u.unpack('>LLLL16x');
+  const dataOffset = header[0] as number;
+  const mapOffset = header[1] as number;
+  const dataLength = header[2] as number;
+  const mapLength = header[3] as number;
+
+  if (dataOffset + dataLength > data.length || mapOffset + mapLength > data.length) {
+    return err('offsets/lengths in header are nonsense');
+  }
+
+  const uData = new Unpacker(data.slice(dataOffset, dataOffset + dataLength));
+  const uMap = new Unpacker(data.slice(mapOffset, mapOffset + mapLength));
+
+  uMap.skip(16); // skip copy of resource header
+  const mapHeader = uMap.unpack('>LHH');
+  fork.junkNextresmap = mapHeader[0] as number;
+  fork.junkFilerefnum = mapHeader[1] as number;
+  fork.fileAttributes = mapHeader[2] as number;
+
+  const typeInfo = uMap.unpack('>HHH');
+  const typelistOffsetInMap = typeInfo[0] as number;
+  const namelistOffsetInMap = typeInfo[1] as number;
+  let numTypes = (typeInfo[2] as number) + 1;
+
+  const mapData = data.slice(mapOffset, mapOffset + mapLength);
+  const uTypes = new Unpacker(mapData.slice(typelistOffsetInMap));
+  const uNames = new Unpacker(mapData.slice(namelistOffsetInMap));
+
+  const order: Array<{ type: ResType; id: number; offset: number }> = [];
+
+  for (let i = 0; i < numTypes; i++) {
+    const typeRec = uMap.unpack('>4sHH');
+    const resType = typeRec[0] as Uint8Array;
+    let resCount = (typeRec[1] as number) + 1;
+    const reslistOffset = typeRec[2] as number;
+
+    const typeKey = Buffer.from(resType).toString('binary');
+    
+    if (fork.tree.has(typeKey)) {
+      return err(`${typeKey} already seen`);
+    }
+    
+    fork.tree.set(typeKey, new Map());
+
+    uTypes.seek(reslistOffset);
+    
+    for (let j = 0; j < resCount; j++) {
+      const resRec = uTypes.unpack('>hHLL');
+      const resId = resRec[0] as number;
+      const resNameOffset = resRec[1] as number;
+      const resPackedAttr = resRec[2] as number;
+      const resJunk = resRec[3] as number;
+
+      // unpack attributes
+      const resFlags = (resPackedAttr & 0xFF000000) >>> 24;
+      const resDataOffset = resPackedAttr & 0x00FFFFFF;
+
+      order.push({ type: resType, id: resId, offset: resDataOffset });
+
+      // check compressed flag
+      if ((resFlags & 1) !== 0) {
+        return err('compressed resources are not supported');
+      }
+
+      // fetch name
+      let resName = new Uint8Array(0);
+      if (resNameOffset !== 0xFFFF) {
+        uNames.seek(resNameOffset);
+        const nameLength = uNames.unpack('>B')[0] as number;
+        const resNameRaw = uNames.read(nameLength);
+        resName = new Uint8Array(resNameRaw);
+      }
+
+      // fetch resource data from data section
+      uData.seek(resDataOffset);
+      const resSize = uData.unpack('>i')[0] as number;
+      const resDataRaw = uData.read(resSize);
+      const resData = new Uint8Array(resDataRaw);
+
+      const res = createResource(resType, resId, resData, resName, resFlags, resJunk);
+      
+      const typeMap = fork.tree.get(typeKey);
+      if (!typeMap) {
+        return err('Internal error: type map not found');
+      }
+      
+      if (typeMap.has(resId)) {
+        return err(`Duplicate resource ID ${resId} for type ${typeKey}`);
+      }
+      
+      typeMap.set(resId, res);
+    }
+  }
+
+  // Set order
+  order.sort((a, b) => a.offset - b.offset);
+  for (let i = 0; i < order.length; i++) {
+    const item = order[i];
+    if (!item) continue;
+    const typeKey = Buffer.from(item.type).toString('binary');
+    const typeMap = fork.tree.get(typeKey);
+    if (typeMap) {
+      const res = typeMap.get(item.id);
+      if (res) {
+        res.order = i;
+      }
+    }
+  }
+
+  return ok(fork);
+}
+
+/**
+ * Gets an ordered flat list of all resources
+ */
+export function orderedFlatList(fork: ResourceFork): Resource[] {
+  const flat: Resource[] = [];
+  
+  for (const typeMap of fork.tree.values()) {
+    for (const res of typeMap.values()) {
+      flat.push(res);
+    }
+  }
+  
+  return flat.sort((a, b) => a.order - b.order);
+}
+
+/**
+ * Packs a resource fork to bytes
+ */
+export function packResourceFork(fork: ResourceFork): Result<Uint8Array, string> {
+  const buffers: Uint8Array[] = [];
+  let position = 0;
+
+  // Helper to write bytes
+  const write = (data: Uint8Array) => {
+    buffers.push(data);
+    position += data.length;
+  };
+
+  // Helper to get current position
+  const tell = () => position;
+
+  // Resource fork header
+  const resForkOffset = tell();
+  const packer = new Packer();
+  
+  // Placeholders for offsets and lengths (we'll calculate these later)
+  const dataOffsetPos = buffers.length;
+  write(packer.pack('>L', 0)); // data offset placeholder
+  const mapOffsetPos = buffers.length;
+  write(packer.pack('>L', 0)); // map offset placeholder
+  const dataLengthPos = buffers.length;
+  write(packer.pack('>L', 0)); // data length placeholder
+  const mapLengthPos = buffers.length;
+  write(packer.pack('>L', 0)); // map length placeholder
+  write(new Uint8Array(112 + 128)); // system-reserved + app-reserved
+
+  // Write data section
+  const dataSectionOffset = tell();
+  const resDataOffsets = new Map<string, number>();
+
+  for (const res of orderedFlatList(fork)) {
+    const key = `${Buffer.from(res.type).toString('binary')}:${res.num}`;
+    resDataOffsets.set(key, tell());
+    write(packer.pack('>i', res.data.length));
+    write(res.data);
+  }
+
+  const dataSectionLength = tell() - dataSectionOffset;
+
+  // Write map section
+  const mapSectionOffset = tell();
+  
+  // Copy of resource header (placeholder for now)
+  const copyHeaderPos = buffers.length;
+  write(new Uint8Array(16));
+  
+  write(packer.pack('>LHH', fork.junkNextresmap, fork.junkFilerefnum, fork.fileAttributes));
+  
+  const typesOffsetPos = buffers.length;
+  write(packer.pack('>H', 0)); // types offset placeholder
+  const namesOffsetPos = buffers.length;
+  write(packer.pack('>H', 0)); // names offset placeholder
+
+  // Write resource types
+  const resListOffset = tell();
+  
+  write(packer.pack('>H', fork.tree.size - 1)); // number of types minus one
+
+  const typeOffsets = new Map<string, number>();
+  
+  for (const [typeKey] of fork.tree) {
+    const resType = Buffer.from(typeKey, 'binary');
+    const typeMap = fork.tree.get(typeKey);
+    if (!typeMap || typeMap.size === 0) {
+      return err(`Can't write resource types that contain 0 resources`);
+    }
+    
+    write(new Uint8Array(resType));
+    write(packer.pack('>H', typeMap.size - 1)); // count minus one
+    const offsetPos = buffers.length;
+    typeOffsets.set(typeKey, offsetPos);
+    write(packer.pack('>H', 0)); // offset placeholder
+  }
+
+  // Write resource lists
+  const nameOffsets = new Map<string, number>();
+  
+  for (const [typeKey, typeMap] of fork.tree) {
+    // Update type offset
+    const typeOffsetPos = typeOffsets.get(typeKey);
+    if (typeOffsetPos !== undefined) {
+      const relOffset = tell() - resListOffset;
+      const offsetBytes = packer.pack('>H', relOffset);
+      buffers[typeOffsetPos] = offsetBytes;
+    }
+    
+    for (const [resId, res] of typeMap) {
+      write(packer.pack('>h', resId));
+      
+      const nameOffsetPos = buffers.length;
+      nameOffsets.set(`${typeKey}:${resId}`, nameOffsetPos);
+      write(packer.pack('>H', 0)); // name offset placeholder
+      
+      const key = `${typeKey}:${resId}`;
+      const dataOffset = resDataOffsets.get(key);
+      if (dataOffset === undefined) {
+        return err('Internal error: data offset not found');
+      }
+      
+      const relOffset = dataOffset - dataSectionOffset;
+      const packedAttr = (res.flags << 24) | relOffset;
+      write(packer.pack('>L', packedAttr));
+      write(packer.pack('>L', res.junk));
+    }
+  }
+
+  // Write resource names
+  const resNamesOffset = tell();
+  
+  for (const res of orderedFlatList(fork)) {
+    const typeKey = Buffer.from(res.type).toString('binary');
+    const key = `${typeKey}:${res.num}`;
+    const nameOffsetPos = nameOffsets.get(key);
+    
+    if (res.name.length > 0) {
+      if (nameOffsetPos !== undefined) {
+        const relOffset = tell() - resNamesOffset;
+        const offsetBytes = packer.pack('>H', relOffset);
+        buffers[nameOffsetPos] = offsetBytes;
+      }
+      write(packer.pack('>B', res.name.length));
+      write(res.name);
+    } else {
+      if (nameOffsetPos !== undefined) {
+        const offsetBytes = packer.pack('>H', 0xFFFF);
+        buffers[nameOffsetPos] = offsetBytes;
+      }
+    }
+  }
+
+  const mapSectionLength = tell() - mapSectionOffset;
+
+  // Update placeholders
+  buffers[dataOffsetPos] = packer.pack('>L', dataSectionOffset - resForkOffset);
+  buffers[mapOffsetPos] = packer.pack('>L', mapSectionOffset - resForkOffset);
+  buffers[dataLengthPos] = packer.pack('>L', dataSectionLength);
+  buffers[mapLengthPos] = packer.pack('>L', mapSectionLength);
+  
+  // Update copy of header
+  const headerCopy = new Uint8Array(16);
+  headerCopy.set(buffers[dataOffsetPos]!.slice(0, 4), 0);
+  headerCopy.set(buffers[mapOffsetPos]!.slice(0, 4), 4);
+  headerCopy.set(buffers[dataLengthPos]!.slice(0, 4), 8);
+  headerCopy.set(buffers[mapLengthPos]!.slice(0, 4), 12);
+  buffers[copyHeaderPos] = headerCopy;
+  
+  // Update types and names offsets in map
+  buffers[typesOffsetPos] = packer.pack('>H', resListOffset - mapSectionOffset);
+  buffers[namesOffsetPos] = packer.pack('>H', resNamesOffset - mapSectionOffset);
+
+  // Concatenate all buffers
+  const totalLength = buffers.reduce((sum, buf) => sum + buf.length, 0);
+  const result = new Uint8Array(totalLength);
+  let offset = 0;
+  for (const buf of buffers) {
+    result.set(buf, offset);
+    offset += buf.length;
+  }
+
+  return ok(result);
+}
+
+/**
+ * Gets a resource type from the fork
+ */
+export function getResourceType(fork: ResourceFork, key: string | Uint8Array): Result<Map<number, Resource>, string> {
+  let typeKey: string;
+  
+  if (typeof key === 'string') {
+    const parsed = parseTypeName(key);
+    typeKey = Buffer.from(parsed).toString('binary');
+  } else {
+    if (key.length !== 4) {
+      return err('restype isn\'t 4 bytes');
+    }
+    typeKey = Buffer.from(key).toString('binary');
+  }
+  
+  const typeMap = fork.tree.get(typeKey);
+  if (!typeMap) {
+    return err(`Resource type ${key} not found`);
+  }
+  
+  return ok(typeMap);
+}
+
+/**
+ * Gets a string representation of the resource fork
+ */
+export function resourceForkToString(fork: ResourceFork): string {
+  const typeCounts: Array<[string, number]> = [];
+  
+  for (const [typeKey, typeMap] of fork.tree) {
+    const resType = Buffer.from(typeKey, 'binary');
+    const sanitized = sanitizeTypeName(new Uint8Array(resType));
+    typeCounts.push([sanitized, typeMap.size]);
+  }
+  
+  const parts = typeCounts.map(([type, count]) => `${count} ${type}`);
+  return `ResourceFork(${parts.join(', ')})`;
 }
