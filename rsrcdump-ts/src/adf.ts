@@ -13,13 +13,14 @@ export const ADF_ENTRYNUM_RESOURCEFORK = 2;
  * Unpacks an AppleDouble file
  */
 export function unpackAdf(adfData: Uint8Array): Result<Map<number, Uint8Array>, string> {
-  const u = new Unpacker(adfData);
+  try {
+    const u = new Unpacker(adfData);
 
-  const header = u.unpack('>LL16sH');
-  const magic = header[0] as number;
-  const version = header[1] as number;
-  const filler = header[2] as Uint8Array;
-  const numEntries = header[3] as number;
+    const header = u.unpack('>LL16sH');
+    const magic = header[0] as number;
+    const version = header[1] as number;
+    const filler = header[2] as Uint8Array;
+    const numEntries = header[3] as number;
 
   if (magic !== ADF_MAGIC) {
     return err('AppleDouble magic number not found');
@@ -36,15 +37,18 @@ export function unpackAdf(adfData: Uint8Array): Result<Map<number, Uint8Array>, 
     entryOffsets.push([entry[0] as number, entry[1] as number, entry[2] as number]);
   }
 
-  const entries = new Map<number, Uint8Array>();
-  entries.set(0, filler); // Entry #0 is invalid -- use it for the filler
+    const entries = new Map<number, Uint8Array>();
+    entries.set(0, filler); // Entry #0 is invalid -- use it for the filler
 
-  for (const [entryId, offset, length] of entryOffsets) {
-    u.seek(offset);
-    entries.set(entryId, u.read(length));
+    for (const [entryId, offset, length] of entryOffsets) {
+      u.seek(offset);
+      entries.set(entryId, u.read(length));
+    }
+
+    return ok(entries);
+  } catch (e) {
+    return err(`Not ADF: ${e}`);
   }
-
-  return ok(entries);
 }
 
 /**

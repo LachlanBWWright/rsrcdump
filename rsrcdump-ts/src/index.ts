@@ -135,7 +135,51 @@ export async function saveToJson(
 }
 
 /**
- * Loads bytes from JSON
+ * Loads bytes from JSON (async version with struct specs support)
+ */
+export async function loadBytesFromJsonAsync(
+  jsonBlob: unknown,
+  structSpecs: string[] = [],
+  onlyTypes: string[] = [],
+  skipTypes: string[] = [],
+  adf: boolean = true
+): Promise<Result<Uint8Array, string>> {
+  const converters = await getConverters(structSpecs);
+
+  const onlyTypeBytes = onlyTypes.map(t => parseTypeName(t));
+  const skipTypeBytes = skipTypes.map(t => parseTypeName(t));
+
+  const forkResult = jsonToResourceFork(
+    jsonBlob as any,
+    converters,
+    onlyTypeBytes,
+    skipTypeBytes
+  );
+
+  if (!forkResult.ok) {
+    return forkResult;
+  }
+
+  const fork = forkResult.value;
+  const packResult = packResourceFork(fork);
+
+  if (!packResult.ok) {
+    return packResult;
+  }
+
+  const binaryFork = packResult.value;
+
+  if (adf) {
+    const adfEntries = new Map<number, Uint8Array>();
+    adfEntries.set(ADF_ENTRYNUM_RESOURCEFORK, binaryFork);
+    return packAdf(adfEntries);
+  }
+
+  return ok(binaryFork);
+}
+
+/**
+ * Loads bytes from JSON (sync version, no struct specs)
  */
 export function loadBytesFromJson(
   jsonBlob: unknown,

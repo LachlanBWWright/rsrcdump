@@ -10,30 +10,35 @@ export const ADF_ENTRYNUM_RESOURCEFORK = 2;
  * Unpacks an AppleDouble file
  */
 export function unpackAdf(adfData) {
-    const u = new Unpacker(adfData);
-    const header = u.unpack('>LL16sH');
-    const magic = header[0];
-    const version = header[1];
-    const filler = header[2];
-    const numEntries = header[3];
-    if (magic !== ADF_MAGIC) {
-        return err('AppleDouble magic number not found');
+    try {
+        const u = new Unpacker(adfData);
+        const header = u.unpack('>LL16sH');
+        const magic = header[0];
+        const version = header[1];
+        const filler = header[2];
+        const numEntries = header[3];
+        if (magic !== ADF_MAGIC) {
+            return err('AppleDouble magic number not found');
+        }
+        if (version !== ADF_VERSION) {
+            return err(`Only Version 2 ADF is supported (this is version ${version.toString(16).padStart(8, '0')})`);
+        }
+        const entryOffsets = [];
+        for (let i = 0; i < numEntries; i++) {
+            const entry = u.unpack('>LLL');
+            entryOffsets.push([entry[0], entry[1], entry[2]]);
+        }
+        const entries = new Map();
+        entries.set(0, filler); // Entry #0 is invalid -- use it for the filler
+        for (const [entryId, offset, length] of entryOffsets) {
+            u.seek(offset);
+            entries.set(entryId, u.read(length));
+        }
+        return ok(entries);
     }
-    if (version !== ADF_VERSION) {
-        return err(`Only Version 2 ADF is supported (this is version ${version.toString(16).padStart(8, '0')})`);
+    catch (e) {
+        return err(`Not ADF: ${e}`);
     }
-    const entryOffsets = [];
-    for (let i = 0; i < numEntries; i++) {
-        const entry = u.unpack('>LLL');
-        entryOffsets.push([entry[0], entry[1], entry[2]]);
-    }
-    const entries = new Map();
-    entries.set(0, filler); // Entry #0 is invalid -- use it for the filler
-    for (const [entryId, offset, length] of entryOffsets) {
-        u.seek(offset);
-        entries.set(entryId, u.read(length));
-    }
-    return ok(entries);
 }
 /**
  * Packs data into an AppleDouble file

@@ -24,7 +24,11 @@ export declare function load(pathOrData: string | Uint8Array): Promise<Result<Re
  */
 export declare function saveToJson(data: Uint8Array, structSpecs?: string[], includeTypes?: string[], excludeTypes?: string[]): Promise<Result<string, string>>;
 /**
- * Loads bytes from JSON
+ * Loads bytes from JSON (async version with struct specs support)
+ */
+export declare function loadBytesFromJsonAsync(jsonBlob: unknown, structSpecs?: string[], onlyTypes?: string[], skipTypes?: string[], adf?: boolean): Promise<Result<Uint8Array, string>>;
+/**
+ * Loads bytes from JSON (sync version, no struct specs)
  */
 export declare function loadBytesFromJson(jsonBlob: unknown, structSpecs?: string[], onlyTypes?: string[], skipTypes?: string[], adf?: boolean): Result<Uint8Array, string>;
 //# sourceMappingURL=index.d.ts.map

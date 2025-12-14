@@ -64,7 +64,6 @@ export function structTemplateFromString(template) {
     }
     const fieldFormats = splitStructFormatFields(formatStr);
     const recordLength = calcsize(formatStr);
-    const isScalar = fieldFormats.length === 1;
     // Expand field name macros
     const expandedFieldNames = [];
     for (const field of fieldNames) {
@@ -113,11 +112,13 @@ export function structTemplateFromString(template) {
             finalFieldNames.push(fallback);
         }
     }
+    // Determine if scalar: single field and no user-provided names
+    const isScalar = fieldFormats.length === 1 && fieldNames.length === 0;
     return ok({
         format: formatStr,
         recordLength,
         fieldFormats,
-        fieldNames: finalFieldNames,
+        fieldNames: isScalar ? [] : finalFieldNames,
         isList,
         isScalar,
     });
@@ -139,7 +140,10 @@ export function unpackRecord(template, data, offset) {
  * Tags values with field names
  */
 function tagValues(template, values) {
-    if (template.fieldNames.length > 0) {
+    // Check if we have any real user-provided field names (not just fallbacks)
+    const hasRealFieldNames = template.fieldNames.length > 0 &&
+        !template.fieldNames.every(name => !name || name.startsWith('.field'));
+    if (hasRealFieldNames) {
         if (template.fieldNames.length !== values.length) {
             throw new Error(`Number of field names (${template.fieldNames.length}) does not match number of values (${values.length})`);
         }
@@ -163,7 +167,8 @@ function tagValues(template, values) {
         return values[0];
     }
     else {
-        return values;
+        // Return array for unnamed multi-field records
+        return values.map(v => v instanceof Uint8Array ? Buffer.from(v).toString('hex').toUpperCase() : v);
     }
 }
 /**
@@ -214,14 +219,17 @@ function packRecord(template, jsonObj) {
     try {
         const packer = new Packer();
         if (template.isScalar) {
-            if (Array.isArray(jsonObj) || typeof jsonObj === 'object') {
+            if (Array.isArray(jsonObj) || (typeof jsonObj === 'object' && jsonObj !== null)) {
                 return err(`json_obj must not be a list or dict ${jsonObj}`);
             }
             const value = processJsonField(template.fieldFormats[0], jsonObj);
             return ok(packer.pack(template.format, value));
         }
-        else if (template.fieldNames.length > 0) {
-            if (typeof jsonObj !== 'object' || Array.isArray(jsonObj)) {
+        // Check if we have real user-provided field names
+        const hasRealFieldNames = template.fieldNames.length > 0 &&
+            !template.fieldNames.every(name => !name || name.startsWith('.field'));
+        if (hasRealFieldNames) {
+            if (typeof jsonObj !== 'object' || Array.isArray(jsonObj) || jsonObj === null) {
                 return err('Expected object for named fields');
             }
             const obj = jsonObj;
@@ -262,12 +270,12 @@ export async function structTemplateFromStringWithTypename(templateArg) {
     if (!trimmed || trimmed.startsWith('//')) {
         return err('Empty or comment line');
     }
-    const parts = trimmed.split(':', 2);
-    if (parts.length < 2) {
+    const colonIdx = trimmed.indexOf(':');
+    if (colonIdx === -1) {
         return err('Template must have format: restype:format:fields');
     }
-    const restypeStr = parts[0];
-    const formatStr = parts[1];
+    const restypeStr = trimmed.slice(0, colonIdx);
+    const formatStr = trimmed.slice(colonIdx + 1);
     if (!restypeStr || !formatStr) {
         return err('Invalid template format');
     }

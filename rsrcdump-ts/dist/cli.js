@@ -2,7 +2,7 @@
  * Command-line interface for rsrcdump-ts
  */
 import { readFile, writeFile } from 'fs/promises';
-import { load, saveToJson, loadBytesFromJson } from './index.js';
+import { load, saveToJson, loadBytesFromJsonAsync } from './index.js';
 import { isOk } from './result.js';
 import { resourceForkToString } from './resfork.js';
 async function main() {
@@ -47,15 +47,21 @@ async function main() {
     else if (command === 'create') {
         const inputPath = args[1];
         const outputPath = args[2];
+        const structFile = args[3];
         if (!inputPath || !outputPath) {
-            console.error('Usage: npm run cli create <input.json> <output.rsrc>');
+            console.error('Usage: npm run cli create <input.json> <output.rsrc> [struct-file]');
             process.exit(1);
         }
         console.log(`Creating ${outputPath} from ${inputPath}...`);
         try {
             const jsonContent = await readFile(inputPath, 'utf-8');
             const jsonBlob = JSON.parse(jsonContent);
-            const bytesResult = loadBytesFromJson(jsonBlob);
+            let structSpecs = [];
+            if (structFile) {
+                const structContent = await readFile(structFile, 'utf-8');
+                structSpecs = structContent.split('\n').filter(line => line.trim() && !line.trim().startsWith('//'));
+            }
+            const bytesResult = await loadBytesFromJsonAsync(jsonBlob, structSpecs);
             if (!isOk(bytesResult)) {
                 console.error('Error:', bytesResult.error);
                 process.exit(1);
