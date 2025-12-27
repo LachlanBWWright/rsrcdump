@@ -1,6 +1,6 @@
 {
-  "name": "@lachlanwright/rsrcdump-ts",
-  "version": "1.0.0",
+  "name": "@lachlanbwwright/rsrcdump-ts",
+  "version": "1.0.1",
   "type": "module",
   "main": "./build/index.js",
   "types": "./build/index.d.ts",
