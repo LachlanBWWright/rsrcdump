@@ -1,0 +1,117 @@
+name: Code Quality
+
+on:
+  push:
+    branches: [ main, master ]
+    paths:
+      - 'rsrcdump-ts/**'
+  pull_request:
+    branches: [ main, master ]
+    paths:
+      - 'rsrcdump-ts/**'
+
+jobs:
+  lint:
+    name: Lint TypeScript
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20.x'
+        cache: 'npm'
+        cache-dependency-path: rsrcdump-ts/package-lock.json
+    
+    - name: Install dependencies
+      working-directory: ./rsrcdump-ts
+      run: npm ci
+    
+    - name: Run ESLint
+      working-directory: ./rsrcdump-ts
+      run: npm run lint
+    
+    - name: Check TypeScript compilation
+      working-directory: ./rsrcdump-ts
+      run: npx tsc --noEmit
+
+  type-coverage:
+    name: Type Coverage
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20.x'
+        cache: 'npm'
+        cache-dependency-path: rsrcdump-ts/package-lock.json
+    
+    - name: Install dependencies
+      working-directory: ./rsrcdump-ts
+      run: npm ci
+    
+    - name: Build
+      working-directory: ./rsrcdump-ts
+      run: npm run build
+    
+    - name: Verify no non-null assertions
+      working-directory: ./rsrcdump-ts
+      run: |
+        # Check for non-null assertions in source files (excluding test files)
+        if grep -r "!" src/ --include="*.ts" --exclude="*.test.ts" | grep -E "\![;\.]|\!\[" | grep -v "//" ; then
+          echo "Error: Non-null assertions found in source code"
+          exit 1
+        else
+          echo "✓ No non-null assertions found"
+        fi
+    
+    - name: Verify strict TypeScript config
+      working-directory: ./rsrcdump-ts
+      run: |
+        # Verify strict settings are enabled
+        grep -q '"strict": true' tsconfig.json || exit 1
+        grep -q '"noUncheckedIndexedAccess": true' tsconfig.json || exit 1
+        echo "✓ Strict TypeScript configuration verified"
+
+  test-coverage:
+    name: Test Coverage
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20.x'
+        cache: 'npm'
+        cache-dependency-path: rsrcdump-ts/package-lock.json
+    
+    - name: Install dependencies
+      working-directory: ./rsrcdump-ts
+      run: npm ci
+    
+    - name: Build
+      working-directory: ./rsrcdump-ts
+      run: npm run build
+    
+    - name: Run tests
+      working-directory: ./rsrcdump-ts
+      run: npm test
+    
+    - name: Verify test count
+      working-directory: ./rsrcdump-ts
+      run: |
+        # Ensure we have a reasonable number of tests
+        TEST_COUNT=$(npm test 2>&1 | grep -o "[0-9]* passed" | head -1 | grep -o "[0-9]*")
+        if [ "$TEST_COUNT" -lt 70 ]; then
+          echo "Error: Expected at least 70 tests, found $TEST_COUNT"
+          exit 1
+        else
+          echo "✓ $TEST_COUNT tests passed"
+        fi

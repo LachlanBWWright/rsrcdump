@@ -33,12 +33,14 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:ui": "vitest --ui",
+    "test:coverage": "vitest run --coverage",
     "lint": "eslint --ext .ts .",
     "lint:fix": "eslint --ext .ts . --fix",
     "cli": "tsx src/cli.ts",
     "pack:test": "./scripts/pack-test.sh",
     "example:basic": "tsx examples/basic-usage.ts",
-    "example:advanced": "tsx examples/advanced-usage.ts"
+    "example:advanced": "tsx examples/advanced-usage.ts",
+    "verify": "npm run lint && npm run build && npm test"
   },
   "keywords": [
     "resource-fork",

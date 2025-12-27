@@ -1,0 +1,80 @@
+name: TypeScript CI
+
+on:
+  push:
+    branches: [ main, master ]
+    paths:
+      - 'rsrcdump-ts/**'
+      - '.github/workflows/typescript-ci.yml'
+  pull_request:
+    branches: [ main, master ]
+    paths:
+      - 'rsrcdump-ts/**'
+
+jobs:
+  test:
+    name: Test on Node ${{ matrix.node-version }}
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        node-version: [18.x, 20.x, 21.x]
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Use Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+        cache-dependency-path: rsrcdump-ts/package-lock.json
+    
+    - name: Install dependencies
+      working-directory: ./rsrcdump-ts
+      run: npm ci
+    
+    - name: Lint
+      working-directory: ./rsrcdump-ts
+      run: npm run lint
+    
+    - name: Build
+      working-directory: ./rsrcdump-ts
+      run: npm run build
+    
+    - name: Test
+      working-directory: ./rsrcdump-ts
+      run: npm test
+    
+    - name: Test package creation
+      working-directory: ./rsrcdump-ts
+      run: npm pack --dry-run
+
+  publish-check:
+    name: Verify package readiness
+    runs-on: ubuntu-latest
+    needs: test
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Use Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20.x'
+        cache: 'npm'
+        cache-dependency-path: rsrcdump-ts/package-lock.json
+    
+    - name: Install dependencies
+      working-directory: ./rsrcdump-ts
+      run: npm ci
+    
+    - name: Build
+      working-directory: ./rsrcdump-ts
+      run: npm run build
+    
+    - name: Check package contents
+      working-directory: ./rsrcdump-ts
+      run: |
+        npm pack --dry-run
+        echo "Package is ready for publishing"
