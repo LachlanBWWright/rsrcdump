@@ -57,8 +57,15 @@ def test_python_roundtrip():
         assert liqd['x_0'] == 988.0, f"Wrong x_0: {liqd['x_0']}"
         assert liqd['y_0'] == 136.0, f"Wrong y_0: {liqd['y_0']}"
         print("✓ Coordinate values validated")
-    
-    print("✓ Python implementation validation passed")
+        # Save JSON output to file for inspection and cross-comparison
+    try:
+        with open('enhanced_python_output.json', 'w') as f:
+            json.dump(json1, f, indent=2, sort_keys=True)
+        print("✓ Saved Python JSON output to enhanced_python_output.json")
+    except Exception as e:
+        print(f"⚠️  Failed to save enhanced_python_output.json: {e}")
+        return False
+        print("✓ Python implementation validation passed")
     return True
 
 

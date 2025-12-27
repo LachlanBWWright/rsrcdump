@@ -3,29 +3,24 @@
  * TypeScript port of rsrcdump with Result/Err error handling
  */
 
-import { readFile } from 'fs/promises';
-import type { ResourceFork } from './resfork.js';
+import { readFile } from "fs/promises";
+import type { ResourceFork } from "./resfork.js";
+import { resourceForkFromBytes, packResourceFork } from "./resfork.js";
+import { unpackAdf, packAdf, ADF_ENTRYNUM_RESOURCEFORK } from "./adf.js";
+import { resourceForkToJsonString, jsonToResourceFork } from "./jsonio.js";
+import { getStandardConverters, StructConverter } from "./resconverters.js";
 import {
-  resourceForkFromBytes,
-  packResourceFork,
-} from './resfork.js';
-import { unpackAdf, packAdf, ADF_ENTRYNUM_RESOURCEFORK } from './adf.js';
-import {
-  resourceForkToJsonString,
-  jsonToResourceFork,
-} from './jsonio.js';
-import { getStandardConverters, StructConverter } from './resconverters.js';
-import {
+  structTemplateFromString,
   structTemplateFromStringWithTypename,
-} from './structtemplate.js';
-import { parseTypeName } from './textio.js';
-import type { Result } from './result.js';
-import { ok, err, isOk } from './result.js';
+} from "./structtemplate.js";
+import { parseTypeName } from "./textio.js";
+import type { Result } from "./result.js";
+import { ok, err, isOk } from "./result.js";
 
-export type { Ok, Err, Result } from './result.js';
-export { ok, err, isOk, isErr, unwrap, map, andThen } from './result.js';
+export type { Ok, Err, Result } from "./result.js";
+export { ok, err, isOk, isErr, unwrap, map, andThen } from "./result.js";
 
-export type { Resource, ResourceFork, ResType } from './resfork.js';
+export type { Resource, ResourceFork, ResType } from "./resfork.js";
 export {
   resourceForkFromBytes,
   packResourceFork,
@@ -37,7 +32,7 @@ export {
   orderedFlatList,
   getResourceType,
   resourceForkToString,
-} from './resfork.js';
+} from "./resfork.js";
 
 export {
   unpackAdf,
@@ -45,14 +40,11 @@ export {
   ADF_MAGIC,
   ADF_VERSION,
   ADF_ENTRYNUM_RESOURCEFORK,
-} from './adf.js';
+} from "./adf.js";
 
-export {
-  resourceForkToJsonString,
-  jsonToResourceFork,
-} from './jsonio.js';
+export { resourceForkToJsonString, jsonToResourceFork } from "./jsonio.js";
 
-export type { ResourceConverter } from './resconverters.js';
+export type { ResourceConverter } from "./resconverters.js";
 export {
   getStandardConverters,
   Base16Converter,
@@ -60,15 +52,15 @@ export {
   SingleStringConverter,
   StringListConverter,
   TextConverter,
-} from './resconverters.js';
+} from "./resconverters.js";
 
-export type { StructTemplate } from './structtemplate.js';
+export type { StructTemplate } from "./structtemplate.js";
 export {
   structTemplateFromString,
   structTemplateFromStringWithTypename,
   unpackRecord,
   pack as packStruct,
-} from './structtemplate.js';
+} from "./structtemplate.js";
 
 export {
   getGlobalEncoding,
@@ -78,15 +70,17 @@ export {
   sanitizeResourceName,
   decode,
   encode,
-} from './textio.js';
+} from "./textio.js";
 
 /**
  * Loads a resource fork from a file path or bytes
  */
-export async function load(pathOrData: string | Uint8Array): Promise<Result<ResourceFork, string>> {
+export async function load(
+  pathOrData: string | Uint8Array,
+): Promise<Result<ResourceFork, string>> {
   let data: Uint8Array;
 
-  if (typeof pathOrData === 'string') {
+  if (typeof pathOrData === "string") {
     try {
       const buffer = await readFile(pathOrData);
       data = new Uint8Array(buffer);
@@ -118,7 +112,7 @@ export async function saveToJson(
   data: Uint8Array,
   structSpecs: string[] = [],
   includeTypes: string[] = [],
-  excludeTypes: string[] = []
+  excludeTypes: string[] = [],
 ): Promise<Result<string, string>> {
   const loadResult = await load(data);
   if (!loadResult.ok) {
@@ -128,10 +122,15 @@ export async function saveToJson(
   const fork = loadResult.value;
   const converters = await getConverters(structSpecs);
 
-  const includeTypeBytes = includeTypes.map(t => parseTypeName(t));
-  const excludeTypeBytes = excludeTypes.map(t => parseTypeName(t));
+  const includeTypeBytes = includeTypes.map((t) => parseTypeName(t));
+  const excludeTypeBytes = excludeTypes.map((t) => parseTypeName(t));
 
-  return resourceForkToJsonString(fork, includeTypeBytes, excludeTypeBytes, converters);
+  return resourceForkToJsonString(
+    fork,
+    includeTypeBytes,
+    excludeTypeBytes,
+    converters,
+  );
 }
 
 /**
@@ -142,18 +141,18 @@ export async function loadBytesFromJsonAsync(
   structSpecs: string[] = [],
   onlyTypes: string[] = [],
   skipTypes: string[] = [],
-  adf: boolean = true
+  adf: boolean = true,
 ): Promise<Result<Uint8Array, string>> {
   const converters = await getConverters(structSpecs);
 
-  const onlyTypeBytes = onlyTypes.map(t => parseTypeName(t));
-  const skipTypeBytes = skipTypes.map(t => parseTypeName(t));
+  const onlyTypeBytes = onlyTypes.map((t) => parseTypeName(t));
+  const skipTypeBytes = skipTypes.map((t) => parseTypeName(t));
 
   const forkResult = jsonToResourceFork(
     jsonBlob as any,
     converters,
     onlyTypeBytes,
-    skipTypeBytes
+    skipTypeBytes,
   );
 
   if (!forkResult.ok) {
@@ -186,18 +185,18 @@ export function loadBytesFromJson(
   structSpecs: string[] = [],
   onlyTypes: string[] = [],
   skipTypes: string[] = [],
-  adf: boolean = true
+  adf: boolean = true,
 ): Result<Uint8Array, string> {
   const converters = getConvertersSync(structSpecs);
 
-  const onlyTypeBytes = onlyTypes.map(t => parseTypeName(t));
-  const skipTypeBytes = skipTypes.map(t => parseTypeName(t));
+  const onlyTypeBytes = onlyTypes.map((t) => parseTypeName(t));
+  const skipTypeBytes = skipTypes.map((t) => parseTypeName(t));
 
   const forkResult = jsonToResourceFork(
     jsonBlob as any,
     converters,
     onlyTypeBytes,
-    skipTypeBytes
+    skipTypeBytes,
   );
 
   if (!forkResult.ok) {
@@ -232,7 +231,7 @@ async function getConverters(structSpecs: string[]): Promise<Map<string, any>> {
     const result = await structTemplateFromStringWithTypename(templateArg);
     if (isOk(result)) {
       const { converter, restype } = result.value;
-      const typeKey = Buffer.from(restype).toString('binary');
+      const typeKey = Buffer.from(restype).toString("binary");
       converters.set(typeKey, new StructConverter(converter));
     }
   }
@@ -243,11 +242,41 @@ async function getConverters(structSpecs: string[]): Promise<Map<string, any>> {
 /**
  * Gets converters synchronously
  */
-function getConvertersSync(_structSpecs: string[]): Map<string, any> {
+function getConvertersSync(structSpecs: string[]): Map<string, any> {
   const converters = getStandardConverters();
 
-  // For now, skip struct specs in sync version
-  // A full implementation would need to handle this properly
+  for (const templateArg of structSpecs) {
+    try {
+      const trimmed = templateArg.trim();
+      if (!trimmed || trimmed.startsWith("//")) continue;
+
+      const colonIdx = trimmed.indexOf(":");
+      if (colonIdx === -1) continue;
+
+      const restypeStr = trimmed.slice(0, colonIdx);
+      const formatStr = trimmed.slice(colonIdx + 1);
+      if (!restypeStr || !formatStr) continue;
+
+      const restype = parseTypeName(restypeStr);
+      const templateResult = structTemplateFromString(formatStr);
+      if (!templateResult.ok) {
+        // Skip invalid templates
+        // eslint-disable-next-line no-console
+        console.warn(
+          `Skipping invalid struct spec: ${templateArg} -> ${templateResult.error}`,
+        );
+        continue;
+      }
+
+      const typeKey = Buffer.from(restype).toString("binary");
+      converters.set(typeKey, new StructConverter(templateResult.value));
+    } catch (e) {
+      // Ignore errors during parsing of struct specs
+      // eslint-disable-next-line no-console
+      console.warn(`Failed to parse struct spec '${templateArg}': ${e}`);
+      continue;
+    }
+  }
 
   return converters;
 }

@@ -2,15 +2,15 @@
  * JSON I/O for resource forks
  */
 
-import type { Resource, ResourceFork } from './resfork.js';
+import type { Resource, ResourceFork } from "./resfork.js";
 import {
   resourceNameStr,
   createResource,
   createResourceFork,
-} from './resfork.js';
-import { ResourceConverter, Base16Converter } from './resconverters.js';
-import { decode, encode, parseTypeName } from './textio.js';
-import { Result, ok, err } from './result.js';
+} from "./resfork.js";
+import { ResourceConverter, Base16Converter } from "./resconverters.js";
+import { decode, encode, parseTypeName } from "./textio.js";
+import { Result, ok, err } from "./result.js";
 
 interface ResourceWrapper {
   name?: string;
@@ -42,7 +42,7 @@ export function resourceForkToJson(
   includeTypes: Uint8Array[] = [],
   excludeTypes: Uint8Array[] = [],
   converters: Map<string, ResourceConverter>,
-  metadata: Record<string, unknown> = {}
+  metadata: Record<string, unknown> = {},
 ): Result<JsonBlob, string> {
   const jsonBlob: JsonBlob = {
     _metadata: {
@@ -54,10 +54,10 @@ export function resourceForkToJson(
   };
 
   const includeTypeKeys = new Set(
-    includeTypes.map(t => Buffer.from(t).toString('binary'))
+    includeTypes.map((t) => Buffer.from(t).toString("binary")),
   );
   const excludeTypeKeys = new Set(
-    excludeTypes.map(t => Buffer.from(t).toString('binary'))
+    excludeTypes.map((t) => Buffer.from(t).toString("binary")),
   );
 
   for (const [typeKey, typeMap] of fork.tree) {
@@ -68,8 +68,8 @@ export function resourceForkToJson(
       continue;
     }
 
-    const resType = Buffer.from(typeKey, 'binary');
-    const resTypeKey = decode(new Uint8Array(resType), 'replace');
+    const resType = Buffer.from(typeKey, "binary");
+    const resTypeKey = decode(new Uint8Array(resType), "replace");
 
     const typeObj: Record<string, ResourceWrapper> = {};
 
@@ -90,14 +90,15 @@ export function resourceForkToJson(
         wrapper.junk = res.junk;
       }
 
-      if (res.order !== 0xFFFFFFFF) {
+      if (res.order !== 0xffffffff) {
         wrapper.order = res.order;
       }
 
       const unpackResult = converter.unpack(res, fork);
       if (!unpackResult.ok) {
+        // Keep conversion_error to indicate struct conversion failed
         wrapper.conversion_error = unpackResult.error;
-        // Fall back to base16
+        // Still fall back to base16 for usability
         const base16Result = new Base16Converter().unpack(res, fork);
         if (base16Result.ok) {
           wrapper.data = base16Result.value;
@@ -122,13 +123,13 @@ export function jsonToResourceFork(
   jsonBlob: JsonBlob,
   converters: Map<string, ResourceConverter>,
   onlyTypes: Uint8Array[] = [],
-  skipTypes: Uint8Array[] = []
+  skipTypes: Uint8Array[] = [],
 ): Result<ResourceFork, string> {
   const fork = createResourceFork();
 
   const metadata = jsonBlob._metadata;
   if (!metadata) {
-    return err('Missing _metadata in JSON');
+    return err("Missing _metadata in JSON");
   }
 
   fork.fileAttributes = metadata.file_attributes as number;
@@ -136,14 +137,14 @@ export function jsonToResourceFork(
   fork.junkFilerefnum = metadata.junk2 as number;
 
   const onlyTypeKeys = new Set(
-    onlyTypes.map(t => Buffer.from(t).toString('binary'))
+    onlyTypes.map((t) => Buffer.from(t).toString("binary")),
   );
   const skipTypeKeys = new Set(
-    skipTypes.map(t => Buffer.from(t).toString('binary'))
+    skipTypes.map((t) => Buffer.from(t).toString("binary")),
   );
 
   for (const [typeName, typeRecords] of Object.entries(jsonBlob)) {
-    if (typeName.startsWith('_')) {
+    if (typeName.startsWith("_")) {
       continue; // Skip metadata
     }
 
@@ -152,7 +153,7 @@ export function jsonToResourceFork(
     }
 
     const resType = parseTypeName(typeName);
-    const typeKey = Buffer.from(resType).toString('binary');
+    const typeKey = Buffer.from(resType).toString("binary");
 
     if (skipTypeKeys.has(typeKey)) {
       continue;
@@ -166,28 +167,46 @@ export function jsonToResourceFork(
 
     const converter = converters.get(typeKey) || new Base16Converter();
 
-    if (typeof typeRecords !== 'object' || typeRecords === null) {
+    if (typeof typeRecords !== "object" || typeRecords === null) {
       return err(`Type ${typeName} is not an object`);
     }
 
-    for (const [resIdStr, resBlob] of Object.entries(typeRecords as Record<string, unknown>)) {
-      if (typeof resBlob !== 'object' || resBlob === null) {
+    for (const [resIdStr, resBlob] of Object.entries(
+      typeRecords as Record<string, unknown>,
+    )) {
+      if (typeof resBlob !== "object" || resBlob === null) {
         return err(`Resource ${typeName} #${resIdStr} is not an object`);
       }
 
       const wrapper = resBlob as ResourceWrapper;
 
       const resNum = parseInt(resIdStr, 10);
-      const resName = encode(wrapper.name || '', 'replace');
+      const resName = encode(wrapper.name || "", "replace");
       const resFlags = wrapper.flags || 0;
       const resJunk = wrapper.junk || 0;
       const resOrder = wrapper.order !== undefined ? wrapper.order : -1;
 
+      // Prefer converter-specific JSON key (e.g., 'obj'), but fall back to base16 'data' when present
       const dataBlob = wrapper[converter.jsonKey];
-      const packResult = converter.pack(dataBlob);
-      
+      let packResult;
+
+      if (dataBlob === undefined && wrapper.data !== undefined) {
+        // The converter-specific value is missing (unpacked failed earlier); use base16 fallback
+        const base16Pack = new Base16Converter().pack(wrapper.data);
+        if (!base16Pack.ok) {
+          return err(
+            `Failed to pack ${typeName} #${resIdStr} from base16 fallback: ${base16Pack.error}`,
+          );
+        }
+        packResult = base16Pack;
+      } else {
+        packResult = converter.pack(dataBlob);
+      }
+
       if (!packResult.ok) {
-        return err(`Failed to pack ${typeName} #${resIdStr}: ${packResult.error}`);
+        return err(
+          `Failed to pack ${typeName} #${resIdStr}: ${packResult.error}`,
+        );
       }
 
       const res = createResource(
@@ -197,7 +216,7 @@ export function jsonToResourceFork(
         resName,
         resFlags,
         resJunk,
-        resOrder
+        resOrder,
       );
 
       typeMap.set(resNum, res);
@@ -215,16 +234,22 @@ export function resourceForkToJsonString(
   includeTypes: Uint8Array[] = [],
   excludeTypes: Uint8Array[] = [],
   converters: Map<string, ResourceConverter>,
-  metadata: Record<string, unknown> = {}
+  metadata: Record<string, unknown> = {},
 ): Result<string, string> {
-  const jsonResult = resourceForkToJson(fork, includeTypes, excludeTypes, converters, metadata);
-  
+  const jsonResult = resourceForkToJson(
+    fork,
+    includeTypes,
+    excludeTypes,
+    converters,
+    metadata,
+  );
+
   if (!jsonResult.ok) {
     return jsonResult;
   }
 
   try {
-    return ok(JSON.stringify(jsonResult.value, null, '\t'));
+    return ok(JSON.stringify(jsonResult.value, null, "\t"));
   } catch (e) {
     return err(`Failed to stringify JSON: ${e}`);
   }
@@ -237,10 +262,10 @@ export function jsonStringToResourceFork(
   jsonString: string,
   converters: Map<string, ResourceConverter>,
   onlyTypes: Uint8Array[] = [],
-  skipTypes: Uint8Array[] = []
+  skipTypes: Uint8Array[] = [],
 ): Result<ResourceFork, string> {
   let jsonBlob: JsonBlob;
-  
+
   try {
     jsonBlob = JSON.parse(jsonString);
   } catch (e) {

@@ -96,7 +96,7 @@ export function resourceForkFromBytes(data: Uint8Array): Result<ResourceFork, st
   const typeInfo = uMap.unpack('>HHH');
   const typelistOffsetInMap = typeInfo[0] as number;
   const namelistOffsetInMap = typeInfo[1] as number;
-  let numTypes = (typeInfo[2] as number) + 1;
+  const numTypes = (typeInfo[2] as number) + 1;
 
   const mapData = data.slice(mapOffset, mapOffset + mapLength);
   const uTypes = new Unpacker(mapData.slice(typelistOffsetInMap));
@@ -107,7 +107,7 @@ export function resourceForkFromBytes(data: Uint8Array): Result<ResourceFork, st
   for (let i = 0; i < numTypes; i++) {
     const typeRec = uMap.unpack('>4sHH');
     const resType = typeRec[0] as Uint8Array;
-    let resCount = (typeRec[1] as number) + 1;
+    const resCount = (typeRec[1] as number) + 1;
     const reslistOffset = typeRec[2] as number;
 
     const typeKey = Buffer.from(resType).toString('binary');
