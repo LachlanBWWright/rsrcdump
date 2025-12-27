@@ -1,6 +1,37 @@
 # rsrcdump: Extract & convert Mac resource forks
 
-rsrcdump converts Classic Mac OS [resource forks](https://en.wikipedia.org/wiki/Resource_fork) to JSON. It will also convert some common resource types to formats usable in modern tools:
+rsrcdump converts Classic Mac OS [resource forks](https://en.wikipedia.org/wiki/Resource_fork) to JSON and vice versa.
+
+## Repository Structure
+
+This repository contains two implementations:
+
+- **`rsrcdump/`** - Original Python implementation
+- **`rsrcdump-ts/`** - TypeScript port with Result/Err error handling
+- **`python/`** - Python tests and utilities
+- **`sample-specs.txt`** - Sample struct specifications for Otto Matic files
+- **`EarthFarm.ter.rsrc`** - Sample resource file for testing
+
+## Quick Start
+
+### Python Version
+
+See the [Python implementation documentation](rsrcdump/README.md) for usage.
+
+### TypeScript Version
+
+See the [TypeScript implementation documentation](rsrcdump-ts/README.md) for usage.
+
+```bash
+cd rsrcdump-ts
+npm install
+npm run build
+npm run cli list ../EarthFarm.ter.rsrc
+```
+
+## Features
+
+rsrcdump converts some common resource types to modern formats:
 
 | Resource type                      | Converts to                                               |
 |------------------------------------|-----------------------------------------------------------|
