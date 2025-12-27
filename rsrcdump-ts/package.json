@@ -1,17 +1,29 @@
 {
-  "name": "rsrcdump-ts",
+  "name": "@lachlanwright/rsrcdump-ts",
   "version": "1.0.0",
   "type": "module",
-  "main": "build/index.js",
-  "types": "build/index.d.ts",
+  "main": "./build/index.js",
+  "types": "./build/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./build/index.d.ts",
+      "import": "./build/index.js"
+    }
+  },
   "files": [
-    "build",
+    "build/**/*.js",
+    "build/**/*.d.ts",
+    "build/**/*.d.ts.map",
+    "!build/**/*.test.js",
+    "!build/**/*.test.d.ts",
+    "!build/**/*.test.d.ts.map",
+    "!build/**/*.test.js.map",
     "README.md",
     "LICENSE.md"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "prepublishOnly": "npm run build",
+    "prepublishOnly": "npm run build && npm test",
     "prepare": "npm run build",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -19,10 +31,28 @@
     "lint:fix": "eslint --ext .ts . --fix",
     "cli": "tsx src/cli.ts"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": [
+    "resource-fork",
+    "mac",
+    "macos",
+    "classic-mac",
+    "rsrc",
+    "resource",
+    "converter",
+    "json"
+  ],
+  "author": "Lachlan Wright",
   "license": "MIT",
-  "description": "TypeScript port of rsrcdump - Extract and convert Mac resource forks",
+  "description": "TypeScript port of rsrcdump - Extract and convert Mac resource forks with Result/Err error handling",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/LachlanBWWright/rsrcdump.git",
+    "directory": "rsrcdump-ts"
+  },
+  "bugs": {
+    "url": "https://github.com/LachlanBWWright/rsrcdump/issues"
+  },
+  "homepage": "https://github.com/LachlanBWWright/rsrcdump#readme",
   "devDependencies": {
     "@types/node": "^25.0.2",
     "@typescript-eslint/eslint-plugin": "^6.6.0",
@@ -33,5 +63,8 @@
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
     "vitest": "^4.0.15"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }
