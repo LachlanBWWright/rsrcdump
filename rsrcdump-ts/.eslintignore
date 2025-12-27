@@ -3,3 +3,5 @@ build/
 dist/
 coverage/
 *.d.ts
+vitest.config.ts
+examples/
