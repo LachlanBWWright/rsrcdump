@@ -99,7 +99,12 @@ export class SingleStringConverter implements ResourceConverter {
       return ok('');
     }
 
-    const length = res.data[0]!;
+    const lengthByte = res.data[0];
+    if (lengthByte === undefined) {
+      return err('STR resource has no length byte');
+    }
+    
+    const length = lengthByte;
     const text = res.data.slice(1, 1 + length);
     
     // Simplified encoding - use latin1 for macroman approximation
@@ -144,7 +149,12 @@ export class StringListConverter implements ResourceConverter {
         break;
       }
 
-      const length = res.data[offset]!;
+      const lengthByte = res.data[offset];
+      if (lengthByte === undefined) {
+        return err(`STR# resource missing length byte at offset ${offset}`);
+      }
+      
+      const length = lengthByte;
       offset++;
 
       if (offset + length > res.data.length) {

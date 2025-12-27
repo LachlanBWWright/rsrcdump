@@ -346,10 +346,19 @@ export function packResourceFork(fork: ResourceFork): Result<Uint8Array, string>
   
   // Update copy of header
   const headerCopy = new Uint8Array(16);
-  headerCopy.set(buffers[dataOffsetPos]!.slice(0, 4), 0);
-  headerCopy.set(buffers[mapOffsetPos]!.slice(0, 4), 4);
-  headerCopy.set(buffers[dataLengthPos]!.slice(0, 4), 8);
-  headerCopy.set(buffers[mapLengthPos]!.slice(0, 4), 12);
+  const dataOffsetBuf = buffers[dataOffsetPos];
+  const mapOffsetBuf = buffers[mapOffsetPos];
+  const dataLengthBuf = buffers[dataLengthPos];
+  const mapLengthBuf = buffers[mapLengthPos];
+  
+  if (!dataOffsetBuf || !mapOffsetBuf || !dataLengthBuf || !mapLengthBuf) {
+    return err('Failed to pack resource fork header');
+  }
+  
+  headerCopy.set(dataOffsetBuf.slice(0, 4), 0);
+  headerCopy.set(mapOffsetBuf.slice(0, 4), 4);
+  headerCopy.set(dataLengthBuf.slice(0, 4), 8);
+  headerCopy.set(mapLengthBuf.slice(0, 4), 12);
   buffers[copyHeaderPos] = headerCopy;
   
   // Update types and names offsets in map

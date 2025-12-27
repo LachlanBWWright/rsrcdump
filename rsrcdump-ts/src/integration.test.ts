@@ -68,6 +68,8 @@ describe("Integration Tests", () => {
         ...originalLoad.value.tree.keys(),
         ...regenLoad.value.tree.keys(),
       ]);
+      
+      let hasMatches = false;
       for (const key of allKeys) {
         const name = Buffer.from(key, "binary").toString("latin1");
         const orig = originalLoad.value.tree.get(key)?.size || 0;
@@ -77,7 +79,11 @@ describe("Integration Tests", () => {
           console.error(msg);
           throw new Error(msg);
         }
+        hasMatches = true;
       }
+      
+      // Add assertion for vitest
+      expect(hasMatches).toBe(true);
     });
     it("should complete full extract-create cycle", async () => {
       // Step 1: Load the original file
@@ -265,21 +271,30 @@ describe("Integration Tests", () => {
       }
 
       if (originalFork.tree.has(alisKey) && regenFork.tree.has(alisKey)) {
-        const origAlis = originalFork.tree.get(alisKey)!;
-        const regenAlis = regenFork.tree.get(alisKey)!;
+        const origAlis = originalFork.tree.get(alisKey);
+        const regenAlis = regenFork.tree.get(alisKey);
+        if (!origAlis || !regenAlis) return;
+        
         // pick an arbitrary resource id and compare its bytes
         const ids = Array.from(origAlis.keys());
         if (ids.length > 0) {
           const id = ids[0];
-          expect(Buffer.from(regenAlis.get(id)!.data)).toEqual(
-            Buffer.from(origAlis.get(id)!.data),
+          if (!id) return;
+          const origRes = origAlis.get(id);
+          const regenRes = regenAlis.get(id);
+          if (!origRes || !regenRes) return;
+          
+          expect(Buffer.from(regenRes.data)).toEqual(
+            Buffer.from(origRes.data),
           );
         }
       }
 
       // Verify per-type ordering is preserved
       for (const [typeKey, origMap] of originalFork.tree) {
-        const regenMap = regenFork.tree.get(typeKey)!;
+        const regenMap = regenFork.tree.get(typeKey);
+        if (!regenMap) continue;
+        
         const origOrder = Array.from(origMap.values())
           .sort((a, b) => a.order - b.order)
           .map((r) => r.num);
@@ -298,14 +313,19 @@ describe("Integration Tests", () => {
         const rawData = await readFile("../EarthFarm.ter.rsrc");
         const originalLoad = await load(new Uint8Array(rawData));
         expect(isOk(originalLoad)).toBe(true);
+        if (!isOk(originalLoad)) return;
+        
         const originalFork = originalLoad.value;
 
         const origPack = packResourceFork(originalFork);
         expect(origPack.ok).toBe(true);
+        if (!origPack.ok) return;
 
         // Convert via JSON and get packed bytes (no ADF wrapper)
         const jsonRes = await saveToJson(new Uint8Array(rawData), structSpecs);
         expect(isOk(jsonRes)).toBe(true);
+        if (!isOk(jsonRes)) return;
+        
         const jsonBlob = JSON.parse(jsonRes.value);
 
         const regenBytesRes = loadBytesFromJson(
@@ -334,6 +354,8 @@ describe("Integration Tests", () => {
           }
         }
         expect(isOk(regenBytesRes)).toBe(true);
+        if (!isOk(regenBytesRes)) return;
+        if (!origPack.ok) return;
 
         // Compare canonical packed bytes
         expect(Buffer.from(regenBytesRes.value)).toEqual(
@@ -440,7 +462,7 @@ describe("Integration Tests", () => {
           "bytesResult.ok:",
           bytesResult.ok,
           "error:",
-          bytesResult.error,
+          isOk(bytesResult) ? "none" : bytesResult.error,
         );
         if (!isOk(bytesResult)) {
           // eslint-disable-next-line no-console

@@ -41,7 +41,8 @@ export class Unpacker {
     // Parse format string
     let i = 0;
     while (i < fmt.length) {
-      const c = fmt[i]!;
+      const c = fmt[i];
+      if (c === undefined) break;
 
       if (c === ">" || c === "!") {
         littleEndian = false;
@@ -59,14 +60,17 @@ export class Unpacker {
       // Check for count prefix
       let count = 1;
       const numStart = i;
-      while (i < fmt.length && /[0-9]/.test(fmt[i]!)) {
+      while (i < fmt.length) {
+        const digit = fmt[i];
+        if (!digit || !/[0-9]/.test(digit)) break;
         i++;
       }
       if (i > numStart) {
         count = parseInt(fmt.slice(numStart, i), 10);
       }
 
-      const type = fmt[i]!;
+      const type = fmt[i];
+      if (type === undefined) break;
 
       if (type === "x") {
         // Padding byte
@@ -195,7 +199,8 @@ export class Packer {
 
     let i = 0;
     while (i < fmt.length) {
-      const c = fmt[i]!;
+      const c = fmt[i];
+      if (c === undefined) break;
 
       if (c === ">" || c === "!") {
         littleEndian = false;
@@ -213,14 +218,17 @@ export class Packer {
       // Check for count prefix
       let count = 1;
       const numStart = i;
-      while (i < fmt.length && /[0-9]/.test(fmt[i]!)) {
+      while (i < fmt.length) {
+        const digit = fmt[i];
+        if (!digit || !/[0-9]/.test(digit)) break;
         i++;
       }
       if (i > numStart) {
         count = parseInt(fmt.slice(numStart, i), 10);
       }
 
-      const type = fmt[i]!;
+      const type = fmt[i];
+      if (type === undefined) break;
 
       if (type === "x") {
         for (let j = 0; j < count; j++) {
@@ -356,7 +364,8 @@ export class WritePlaceholder {
     let i = 0;
 
     while (i < fmt.length) {
-      const c = fmt[i]!;
+      const c = fmt[i];
+      if (c === undefined) break;
 
       if (
         c === ">" ||
@@ -372,14 +381,17 @@ export class WritePlaceholder {
 
       let count = 1;
       const numStart = i;
-      while (i < fmt.length && /[0-9]/.test(fmt[i]!)) {
+      while (i < fmt.length) {
+        const digit = fmt[i];
+        if (!digit || !/[0-9]/.test(digit)) break;
         i++;
       }
       if (i > numStart) {
         count = parseInt(fmt.slice(numStart, i), 10);
       }
 
-      const type = fmt[i]!;
+      const type = fmt[i];
+      if (type === undefined) break;
 
       if (type === "x" || type === "B" || type === "b") size += count;
       else if (type === "H" || type === "h") size += 2 * count;
@@ -441,7 +453,8 @@ export function calcsize(fmt: string): number {
   let i = 0;
 
   while (i < fmt.length) {
-    const c = fmt[i]!;
+    const c = fmt[i];
+    if (c === undefined) break;
 
     if (
       c === ">" ||
@@ -457,14 +470,17 @@ export function calcsize(fmt: string): number {
 
     let count = 1;
     const numStart = i;
-    while (i < fmt.length && /[0-9]/.test(fmt[i]!)) {
+    while (i < fmt.length) {
+      const digit = fmt[i];
+      if (!digit || !/[0-9]/.test(digit)) break;
       i++;
     }
     if (i > numStart) {
       count = parseInt(fmt.slice(numStart, i), 10);
     }
 
-    const type = fmt[i]!;
+    const type = fmt[i];
+    if (type === undefined) break;
 
     if (type === "x" || type === "B" || type === "b") size += count;
     else if (type === "H" || type === "h") size += 2 * count;

@@ -27,6 +27,8 @@ describe("rsrcdump-ts", () => {
       const result = await load("../EarthFarm.ter.rsrc");
       expect(isOk(result)).toBe(true);
 
+      if (!isOk(result)) return;
+      
       const fork = result.value;
       // We expect at least one resource type and a specific Hedr type with resources
       expect(fork.tree.size).toBeGreaterThan(0);
@@ -177,24 +179,20 @@ describe("rsrcdump-ts", () => {
       // Compare each resource type and contents
       for (const [typeKey, typeMap] of fork.tree) {
         const regenTypeMap = regeneratedFork.tree.get(typeKey);
-        expect(
-          regenTypeMap,
-          `Missing resource type ${Buffer.from(typeKey, "binary").toString(
-            "latin1",
-          )}`,
-        ).toBeDefined();
+        expect(regenTypeMap).toBeDefined();
+        if (!regenTypeMap) {
+          throw new Error(`Missing resource type ${Buffer.from(typeKey, "binary").toString("latin1")}`);
+        }
 
-        expect(regenTypeMap!.size).toBe(typeMap.size);
+        expect(regenTypeMap.size).toBe(typeMap.size);
 
         // Compare each resource
         for (const [resId, res] of typeMap) {
-          const regenRes = regenTypeMap!.get(resId);
-          expect(
-            regenRes,
-            `Missing resource ${Buffer.from(typeKey, "binary").toString(
-              "latin1",
-            )}#${resId}`,
-          ).toBeDefined();
+          const regenRes = regenTypeMap.get(resId);
+          expect(regenRes).toBeDefined();
+          if (!regenRes) {
+            throw new Error(`Missing resource ${Buffer.from(typeKey, "binary").toString("latin1")}#${resId}`);
+          }
 
           // Compare resource properties
           expect(regenRes!.num).toBe(res.num);
