@@ -2,6 +2,16 @@
 
 TypeScript port of [rsrcdump](https://github.com/jorio/rsrcdump) with Result/Err error handling.
 
+## Documentation
+
+- 📖 **[Quick Reference](QUICK_REFERENCE.md)** - Fast reference for common operations
+- 📚 **[API Reference](API.md)** - Complete API documentation
+- ❓ **[FAQ](FAQ.md)** - Frequently asked questions
+- 🧪 **[Testing Guide](TESTING.md)** - How to write and run tests
+- 💻 **[Development Guide](DEVELOPMENT.md)** - Contributing and development workflow
+- 🔧 **[Result Type Pattern](RESULT_TYPE.md)** - Understanding error handling
+- 🔄 **[Migration Guide](MIGRATION.md)** - Migrating from Python rsrcdump
+
 ## Features
 
 - **Strict TypeScript**: Full type safety with strict compiler settings including `noUncheckedIndexedAccess`
@@ -9,6 +19,8 @@ TypeScript port of [rsrcdump](https://github.com/jorio/rsrcdump) with Result/Err
 - **File-for-file Conversion**: Maintains the structure of the original Python implementation
 - **Byte-perfect Round-trips**: Unpack and repack resource forks without data loss
 - **JSON Compatibility**: Produces JSON output identical to the Python version
+- **CLI Executable**: Use as a command-line tool with `rsrcdump-ts`
+- **Well Documented**: Comprehensive guides and examples
 
 ## Installation
 
