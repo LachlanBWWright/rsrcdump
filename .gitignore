@@ -7,4 +7,5 @@ python/output/*.json
 python/output/*.txt
 *.pyc
 .pytest_cache/
-*.egg-info/
+*.egg-info/*.json
+test-*.mjs

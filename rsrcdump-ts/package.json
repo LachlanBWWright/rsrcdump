@@ -4,6 +4,9 @@
   "type": "module",
   "main": "./build/index.js",
   "types": "./build/index.d.ts",
+  "bin": {
+    "rsrcdump-ts": "./bin/rsrcdump-ts.js"
+  },
   "exports": {
     ".": {
       "types": "./build/index.d.ts",
@@ -18,18 +21,24 @@
     "!build/**/*.test.d.ts",
     "!build/**/*.test.d.ts.map",
     "!build/**/*.test.js.map",
+    "bin/",
     "README.md",
     "LICENSE.md"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "build:watch": "tsc -p tsconfig.json --watch",
     "prepublishOnly": "npm run build && npm test",
     "prepare": "npm run build",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:ui": "vitest --ui",
     "lint": "eslint --ext .ts .",
     "lint:fix": "eslint --ext .ts . --fix",
-    "cli": "tsx src/cli.ts"
+    "cli": "tsx src/cli.ts",
+    "pack:test": "./scripts/pack-test.sh",
+    "example:basic": "tsx examples/basic-usage.ts",
+    "example:advanced": "tsx examples/advanced-usage.ts"
   },
   "keywords": [
     "resource-fork",

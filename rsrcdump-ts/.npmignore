@@ -1,0 +1,36 @@
+# Source files
+src/
+tsconfig.json
+.eslintrc.cjs
+.eslintignore
+
+# Tests
+**/*.test.ts
+**/*.test.js
+**/*.test.d.ts
+vitest.config.ts
+
+# Development
+node_modules/
+.git/
+.github/
+examples/
+scripts/
+
+# Documentation (keep some, exclude others)
+VERIFICATION.md
+PROJECT_STATUS.md
+MIGRATION.md
+compare.sh
+
+# Sample files
+*.rsrc
+sample-specs.txt
+
+# Build artifacts
+*.tsbuildinfo
+.DS_Store
+
+# Other
+*.log
+npm-debug.log*

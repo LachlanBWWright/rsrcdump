@@ -12,29 +12,50 @@ TypeScript port of [rsrcdump](https://github.com/jorio/rsrcdump) with Result/Err
 
 ## Installation
 
+### As a Package
+
 ```bash
+npm install @lachlanwright/rsrcdump-ts
+```
+
+### From Source
+
+```bash
+git clone https://github.com/LachlanBWWright/rsrcdump.git
+cd rsrcdump/rsrcdump-ts
 npm install
+npm run build
 ```
 
 ## Usage
 
 ### CLI
 
+After installation, you can use the CLI:
+
 ```bash
 # List resources
-npm run cli list EarthFarm.ter.rsrc
+rsrcdump-ts list EarthFarm.ter.rsrc
 
 # Extract to JSON
-npm run cli extract input.rsrc output.json [struct-specs.txt]
+rsrcdump-ts extract input.rsrc output.json [struct-specs.txt]
 
 # Create from JSON
+rsrcdump-ts create input.json output.rsrc [struct-specs.txt]
+```
+
+Or from source:
+
+```bash
+npm run cli list EarthFarm.ter.rsrc
+npm run cli extract input.rsrc output.json [struct-specs.txt]
 npm run cli create input.json output.rsrc [struct-specs.txt]
 ```
 
 ### As a Library
 
 ```typescript
-import { load, saveToJson, loadBytesFromJsonAsync, isOk } from 'rsrcdump-ts';
+import { load, saveToJson, loadBytesFromJsonAsync, isOk } from '@lachlanwright/rsrcdump-ts';
 
 // Load a resource fork
 const result = await load('file.rsrc');
