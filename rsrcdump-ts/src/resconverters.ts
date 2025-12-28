@@ -5,11 +5,12 @@
 import { Resource, ResourceFork } from './resfork.js';
 import { StructTemplate, unpackRecord, pack } from './structtemplate.js';
 import { Result, ok, err } from './result.js';
+import { JsonOptions } from './jsonio.js';
 
 export interface ResourceConverter {
   separateFile: string;
   jsonKey: string;
-  unpack(res: Resource, fork: ResourceFork): Result<unknown, string>;
+  unpack(res: Resource, fork: ResourceFork, options?: JsonOptions): Result<unknown, string>;
   pack(obj: unknown): Result<Uint8Array, string>;
 }
 
@@ -20,7 +21,7 @@ export class Base16Converter implements ResourceConverter {
   separateFile = '';
   jsonKey = 'data';
 
-  unpack(res: Resource, _fork: ResourceFork): Result<string, string> {
+  unpack(res: Resource, _fork: ResourceFork, _options?: JsonOptions): Result<string, string> {
     return ok(Buffer.from(res.data).toString('hex').toUpperCase());
   }
 
@@ -48,7 +49,7 @@ export class StructConverter implements ResourceConverter {
     this.template = template;
   }
 
-  unpack(res: Resource, _fork: ResourceFork): Result<unknown, string> {
+  unpack(res: Resource, _fork: ResourceFork, options?: JsonOptions): Result<unknown, string> {
     const template = this.template;
 
     if (template.isList) {
@@ -62,7 +63,7 @@ export class StructConverter implements ResourceConverter {
       }
 
       for (let i = 0; i < res.data.length / template.recordLength; i++) {
-        const recordResult = unpackRecord(template, res.data, i * template.recordLength);
+        const recordResult = unpackRecord(template, res.data, i * template.recordLength, options);
         if (!recordResult.ok) {
           return recordResult;
         }
@@ -78,7 +79,7 @@ export class StructConverter implements ResourceConverter {
         );
       }
 
-      return unpackRecord(template, res.data, 0);
+      return unpackRecord(template, res.data, 0, options);
     }
   }
 
@@ -94,7 +95,7 @@ export class SingleStringConverter implements ResourceConverter {
   separateFile = '';
   jsonKey = 'obj';
 
-  unpack(res: Resource, _fork: ResourceFork): Result<string, string> {
+  unpack(res: Resource, _fork: ResourceFork, _options?: JsonOptions): Result<string, string> {
     if (res.data.length === 0) {
       return ok('');
     }
@@ -133,7 +134,7 @@ export class StringListConverter implements ResourceConverter {
   separateFile = '';
   jsonKey = 'obj';
 
-  unpack(res: Resource, _fork: ResourceFork): Result<string[], string> {
+  unpack(res: Resource, _fork: ResourceFork, _options?: JsonOptions): Result<string[], string> {
     if (res.data.length < 2) {
       return ok([]);
     }

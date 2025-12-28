@@ -5,6 +5,13 @@
 import { Unpacker, Packer, calcsize } from './packutils.js';
 import { Result, ok, err } from './result.js';
 
+export interface BacktickGroup {
+  baseName: string;
+  startIndex: number;
+  count: number;
+  fieldsPerItem: number;
+}
+
 export interface StructTemplate {
   format: string;
   recordLength: number;
@@ -12,6 +19,7 @@ export interface StructTemplate {
   fieldNames: Array<string | null>;
   isList: boolean;
   isScalar: boolean;
+  backtickGroups: BacktickGroup[];
 }
 
 /**
@@ -85,11 +93,15 @@ export function structTemplateFromString(template: string): Result<StructTemplat
   const fieldFormats = splitStructFormatFields(formatStr);
   const recordLength = calcsize(formatStr);
 
-  // Expand field name macros
+  // Expand field name macros and track backtick groups
   const expandedFieldNames: string[] = [];
+  const backtickGroups: BacktickGroup[] = [];
+  let currentFieldIndex = 0;
+  
   for (const field of fieldNames) {
     if (!field) {
       expandedFieldNames.push('');
+      currentFieldIndex++;
       continue;
     }
 
@@ -98,6 +110,7 @@ export function structTemplateFromString(template: string): Result<StructTemplat
       const indexPos = field.indexOf('[');
       if (indexPos === -1) {
         expandedFieldNames.push(field);
+        currentFieldIndex++;
         continue;
       }
 
@@ -105,13 +118,25 @@ export function structTemplateFromString(template: string): Result<StructTemplat
       const baseName = field.slice(0, indexPos);
       const fieldValues = baseName.split('`');
 
+      // Check if this is a backtick macro (contains `)
+      if (baseName.includes('`')) {
+        backtickGroups.push({
+          baseName,
+          startIndex: currentFieldIndex,
+          count: repeatCount,
+          fieldsPerItem: fieldValues.length
+        });
+      }
+
       for (let i = 0; i < repeatCount; i++) {
         for (const fv of fieldValues) {
           expandedFieldNames.push(`${fv}_${i}`);
+          currentFieldIndex++;
         }
       }
     } else {
       expandedFieldNames.push(field);
+      currentFieldIndex++;
     }
   }
 
@@ -149,6 +174,7 @@ export function structTemplateFromString(template: string): Result<StructTemplat
     fieldNames: isScalar ? [] : finalFieldNames,
     isList,
     isScalar,
+    backtickGroups,
   });
 }
 
@@ -158,21 +184,23 @@ export function structTemplateFromString(template: string): Result<StructTemplat
 export function unpackRecord(
   template: StructTemplate,
   data: Uint8Array,
-  offset: number
+  offset: number,
+  options?: { useCamelCase?: boolean; useBacktickArrays?: boolean }
 ): Result<unknown, string> {
   try {
     const u = new Unpacker(data, offset);
     const values = u.unpack(template.format);
-    return ok(tagValues(template, values));
+    const useBacktickArrays = options?.useBacktickArrays ?? true;
+    return ok(tagValues(template, values, useBacktickArrays));
   } catch (e) {
     return err(`Failed to unpack record: ${e}`);
   }
 }
 
 /**
- * Tags values with field names
+ * Tags values with field names, supporting backtick macro arrays
  */
-function tagValues(template: StructTemplate, values: (number | Uint8Array)[]): unknown {
+function tagValues(template: StructTemplate, values: (number | Uint8Array)[], useBacktickArrays: boolean = true): unknown {
   // Check if we have any real user-provided field names (not just fallbacks)
   const hasRealFieldNames = template.fieldNames.length > 0 && 
     !template.fieldNames.every(name => !name || name.startsWith('.field'));
@@ -184,8 +212,54 @@ function tagValues(template: StructTemplate, values: (number | Uint8Array)[]): u
       );
     }
 
-    const record: Record<string, number | Uint8Array | string> = {};
+    const record: Record<string, number | Uint8Array | string | unknown[]> = {};
+    const usedIndices = new Set<number>();
+    
+    // Handle backtick groups as arrays if enabled
+    if (useBacktickArrays && template.backtickGroups.length > 0) {
+      for (const group of template.backtickGroups) {
+        const arrayItems: unknown[] = [];
+        
+        for (let i = 0; i < group.count; i++) {
+          const itemData: Record<string, number | Uint8Array | string> = {};
+          
+          for (let j = 0; j < group.fieldsPerItem; j++) {
+            const valueIndex = group.startIndex + (i * group.fieldsPerItem) + j;
+            const fieldName = template.fieldNames[valueIndex];
+            const value = values[valueIndex];
+            
+            if (fieldName && value !== undefined) {
+              // Extract base field name (remove _N suffix)
+              const underscorePos = fieldName.lastIndexOf('_');
+              const baseName = underscorePos > 0 ? fieldName.slice(0, underscorePos) : fieldName;
+              
+              if (value instanceof Uint8Array) {
+                itemData[baseName] = Buffer.from(value).toString('hex').toUpperCase();
+              } else {
+                itemData[baseName] = value;
+              }
+              usedIndices.add(valueIndex);
+            }
+          }
+          
+          // If single field per item, just push the value
+          if (group.fieldsPerItem === 1 && Object.keys(itemData).length === 1) {
+            arrayItems.push(Object.values(itemData)[0]);
+          } else {
+            arrayItems.push(itemData);
+          }
+        }
+        
+        record[group.baseName] = arrayItems;
+      }
+    }
+    
+    // Add remaining fields that aren't part of backtick groups
     for (let i = 0; i < template.fieldNames.length; i++) {
+      if (usedIndices.has(i)) {
+        continue;
+      }
+      
       const name = template.fieldNames[i];
       const value = values[i];
       if (name && value !== undefined) {

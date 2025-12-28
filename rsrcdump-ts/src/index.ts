@@ -72,6 +72,32 @@ export {
   encode,
 } from "./textio.js";
 
+// Case conversion utilities
+export {
+  snakeToCamel,
+  camelToSnake,
+  objectKeysToCamel,
+  objectKeysToSnake,
+} from "./caseutils.js";
+
+// TypeScript type generation
+export {
+  generateTypesFromSpecs,
+  generateTypeFromTemplate,
+  writeGeneratedTypes,
+} from "./typegen.js";
+
+// JSON struct specs
+export type { StructSpecJson, StructFieldJson } from "./jsonspecs.js";
+export {
+  jsonSpecToString,
+  jsonSpecsToStrings,
+  loadJsonSpecs,
+} from "./jsonspecs.js";
+
+// JSON options
+export type { JsonOptions } from "./jsonio.js";
+
 /**
  * Loads a resource fork from a file path or bytes
  */

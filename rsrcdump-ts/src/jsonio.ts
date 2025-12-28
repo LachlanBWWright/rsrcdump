@@ -21,6 +21,7 @@ interface ResourceWrapper {
   obj?: unknown;
   file?: string;
   conversion_error?: string;
+  conversionError?: string;
   [key: string]: unknown;
 }
 
@@ -28,10 +29,16 @@ interface JsonBlob {
   _metadata: {
     junk1: number;
     junk2: number;
-    file_attributes: number;
+    file_attributes?: number;
+    fileAttributes?: number;
     [key: string]: unknown;
   };
   [key: string]: unknown;
+}
+
+export interface JsonOptions {
+  useCamelCase?: boolean;
+  useBacktickArrays?: boolean;
 }
 
 /**
@@ -43,14 +50,21 @@ export function resourceForkToJson(
   excludeTypes: Uint8Array[] = [],
   converters: Map<string, ResourceConverter>,
   metadata: Record<string, unknown> = {},
+  options: JsonOptions = {}
 ): Result<JsonBlob, string> {
+  const useCamelCase = options.useCamelCase ?? false;
+  
+  const metadataObj: Record<string, unknown> = {
+    junk1: fork.junkNextresmap,
+    junk2: fork.junkFilerefnum,
+    ...(useCamelCase 
+      ? { fileAttributes: fork.fileAttributes }
+      : { file_attributes: fork.fileAttributes }),
+    ...metadata,
+  };
+  
   const jsonBlob: JsonBlob = {
-    _metadata: {
-      junk1: fork.junkNextresmap,
-      junk2: fork.junkFilerefnum,
-      file_attributes: fork.fileAttributes,
-      ...metadata,
-    },
+    _metadata: metadataObj as JsonBlob['_metadata'],
   };
 
   const includeTypeKeys = new Set(
@@ -94,10 +108,14 @@ export function resourceForkToJson(
         wrapper.order = res.order;
       }
 
-      const unpackResult = converter.unpack(res, fork);
+      const unpackResult = converter.unpack(res, fork, options);
       if (!unpackResult.ok) {
-        // Keep conversion_error to indicate struct conversion failed
-        wrapper.conversion_error = unpackResult.error;
+        // Keep conversion_error/conversionError to indicate struct conversion failed
+        if (useCamelCase) {
+          wrapper.conversionError = unpackResult.error;
+        } else {
+          wrapper.conversion_error = unpackResult.error;
+        }
         // Still fall back to base16 for usability
         const base16Result = new Base16Converter().unpack(res, fork);
         if (base16Result.ok) {
