@@ -21,7 +21,8 @@ describe('jsonspecs', () => {
       expect(isOk(result)).toBe(true);
       if (!isOk(result)) return;
       
-      expect(result.value).toBe('>hh:x,y');
+      // Unsigned by default (uppercase)
+      expect(result.value).toBe('>HH:x,y');
     });
 
     it('handles list flag', () => {
@@ -38,7 +39,8 @@ describe('jsonspecs', () => {
       expect(isOk(result)).toBe(true);
       if (!isOk(result)) return;
       
-      expect(result.value).toBe('>hh+:x,y');
+      // Unsigned by default (uppercase)
+      expect(result.value).toBe('>HH+:x,y');
     });
 
     it('handles signed integers', () => {

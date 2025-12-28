@@ -15,21 +15,10 @@ describe('typegen', () => {
       
       if (!isOk(templateResult)) return;
       
-      const typeStr = generateTypeFromTemplate(templateResult.value, 'Point', false);
+      const typeStr = generateTypeFromTemplate(templateResult.value, 'Point');
       expect(typeStr).toContain('export interface Point');
       expect(typeStr).toContain('x: number');
       expect(typeStr).toContain('y: number');
-    });
-
-    it('generates camelCase field names when requested', () => {
-      const templateResult = structTemplateFromString('>HH:x_pos,y_pos');
-      expect(isOk(templateResult)).toBe(true);
-      
-      if (!isOk(templateResult)) return;
-      
-      const typeStr = generateTypeFromTemplate(templateResult.value, 'Point', true);
-      expect(typeStr).toContain('xPos: number');
-      expect(typeStr).toContain('yPos: number');
     });
 
     it('generates array type for list structs', () => {
@@ -38,7 +27,7 @@ describe('typegen', () => {
       
       if (!isOk(templateResult)) return;
       
-      const typeStr = generateTypeFromTemplate(templateResult.value, 'Points', false);
+      const typeStr = generateTypeFromTemplate(templateResult.value, 'Points');
       expect(typeStr).toContain('export interface PointsRecord');
       expect(typeStr).toContain('export type Points = PointsRecord[]');
     });
@@ -49,7 +38,7 @@ describe('typegen', () => {
       
       if (!isOk(templateResult)) return;
       
-      const typeStr = generateTypeFromTemplate(templateResult.value, 'YCrd', false);
+      const typeStr = generateTypeFromTemplate(templateResult.value, 'YCrd');
       // Scalar list generates Record type + array
       expect(typeStr).toContain('export type YCrdRecord = number');
       expect(typeStr).toContain('export type YCrd = YCrdRecord[]');
@@ -61,10 +50,21 @@ describe('typegen', () => {
       
       if (!isOk(templateResult)) return;
       
-      const typeStr = generateTypeFromTemplate(templateResult.value, 'Partial', false);
+      const typeStr = generateTypeFromTemplate(templateResult.value, 'Partial');
       expect(typeStr).toContain('x: number');
       expect(typeStr).toContain('.field1: number'); // Note: no quotes in actual output
       expect(typeStr).toContain('z: number');
+    });
+
+    it('preserves field names with underscores', () => {
+      const templateResult = structTemplateFromString('>HH:x_pos,y_pos');
+      expect(isOk(templateResult)).toBe(true);
+      
+      if (!isOk(templateResult)) return;
+      
+      const typeStr = generateTypeFromTemplate(templateResult.value, 'Point');
+      expect(typeStr).toContain('x_pos: number');
+      expect(typeStr).toContain('y_pos: number');
     });
   });
 
@@ -75,7 +75,7 @@ describe('typegen', () => {
         ['Itms', '>HH+:x,y']
       ]);
 
-      const result = generateTypesFromSpecs(specs, false);
+      const result = generateTypesFromSpecs(specs);
       expect(isOk(result)).toBe(true);
       
       if (!isOk(result)) return;
@@ -91,7 +91,7 @@ describe('typegen', () => {
         ['Test', '>H:value']
       ]);
 
-      const result = generateTypesFromSpecs(specs, false);
+      const result = generateTypesFromSpecs(specs);
       expect(isOk(result)).toBe(true);
       
       if (!isOk(result)) return;
@@ -102,23 +102,10 @@ describe('typegen', () => {
       expect(typeStr).toContain('export interface ResourceForkJson');
     });
 
-    it('uses camelCase for metadata when requested', () => {
+    it('uses snake_case for metadata fields', () => {
       const specs = new Map<string, string>();
 
-      const result = generateTypesFromSpecs(specs, true);
-      expect(isOk(result)).toBe(true);
-      
-      if (!isOk(result)) return;
-      
-      const typeStr = result.value;
-      expect(typeStr).toContain('fileAttributes: number');
-      expect(typeStr).toContain('conversionError?: string');
-    });
-
-    it('uses snake_case for metadata when not requested', () => {
-      const specs = new Map<string, string>();
-
-      const result = generateTypesFromSpecs(specs, false);
+      const result = generateTypesFromSpecs(specs);
       expect(isOk(result)).toBe(true);
       
       if (!isOk(result)) return;
@@ -130,10 +117,10 @@ describe('typegen', () => {
 
     it('handles spec parsing errors', () => {
       const specs = new Map<string, string>([
-        ['Bad', '>'] // Empty format after endian prefix
+        ['Bad', '>Z:bad'] // Invalid format character
       ]);
 
-      const result = generateTypesFromSpecs(specs, false);
+      const result = generateTypesFromSpecs(specs);
       expect(isOk(result)).toBe(false);
       if (isOk(result)) return;
       

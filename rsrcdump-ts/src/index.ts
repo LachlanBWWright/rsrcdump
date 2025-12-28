@@ -72,14 +72,6 @@ export {
   encode,
 } from "./textio.js";
 
-// Case conversion utilities
-export {
-  snakeToCamel,
-  camelToSnake,
-  objectKeysToCamel,
-  objectKeysToSnake,
-} from "./caseutils.js";
-
 // TypeScript type generation
 export {
   generateTypesFromSpecs,

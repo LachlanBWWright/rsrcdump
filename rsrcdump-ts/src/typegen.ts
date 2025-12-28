@@ -4,7 +4,6 @@
 
 import { StructTemplate, structTemplateFromString } from './structtemplate.js';
 import { Result, ok, err, isOk } from './result.js';
-import { snakeToCamel } from './caseutils.js';
 
 /**
  * Maps struct format characters to TypeScript types
@@ -40,8 +39,7 @@ function formatCharToTsType(formatChar: string): string {
  */
 function generateRecordType(
   template: StructTemplate,
-  typeName: string,
-  useCamelCase: boolean = true
+  typeName: string
 ): string {
   if (template.isScalar) {
     // Scalar templates produce a single value
@@ -67,8 +65,7 @@ function generateRecordType(
       // Unnamed field
       fields.push(`  ".field${i}": ${tsType};`);
     } else {
-      const finalName = useCamelCase ? snakeToCamel(fieldName) : fieldName;
-      fields.push(`  ${finalName}: ${tsType};`);
+      fields.push(`  ${fieldName}: ${tsType};`);
     }
   }
   
@@ -80,10 +77,9 @@ function generateRecordType(
  */
 export function generateTypeFromTemplate(
   template: StructTemplate,
-  typeName: string,
-  useCamelCase: boolean = true
+  typeName: string
 ): string {
-  const recordType = generateRecordType(template, `${typeName}Record`, useCamelCase);
+  const recordType = generateRecordType(template, `${typeName}Record`);
   
   if (template.isList) {
     return `${recordType}\n\nexport type ${typeName} = ${typeName}Record[];`;
@@ -96,8 +92,7 @@ export function generateTypeFromTemplate(
  * Generates TypeScript type definitions for all struct specs
  */
 export function generateTypesFromSpecs(
-  specs: Map<string, string>,
-  useCamelCase: boolean = true
+  specs: Map<string, string>
 ): Result<string, string> {
   const typeDefs: string[] = [];
   
@@ -108,7 +103,12 @@ export function generateTypesFromSpecs(
   typeDefs.push('');
   
   for (const [resourceType, specString] of specs) {
-    const templateResult = structTemplateFromString(specString);
+    let templateResult;
+    try {
+      templateResult = structTemplateFromString(specString);
+    } catch (e) {
+      return err(`Failed to parse spec for ${resourceType}: ${e}`);
+    }
     
     if (!isOk(templateResult)) {
       return err(`Failed to parse spec for ${resourceType}: ${templateResult.error}`);
@@ -117,7 +117,7 @@ export function generateTypesFromSpecs(
     const template = templateResult.value;
     const typeName = resourceType.replace(/[^a-zA-Z0-9]/g, '_');
     
-    const typeDef = generateTypeFromTemplate(template, typeName, useCamelCase);
+    const typeDef = generateTypeFromTemplate(template, typeName);
     typeDefs.push(typeDef);
     typeDefs.push('');
   }
@@ -127,23 +127,13 @@ export function generateTypesFromSpecs(
   typeDefs.push(' * Wrapper for resource with metadata');
   typeDefs.push(' */');
   typeDefs.push('export interface ResourceWrapper<T> {');
-  if (useCamelCase) {
-    typeDefs.push('  name?: string;');
-    typeDefs.push('  flags?: number;');
-    typeDefs.push('  junk?: number;');
-    typeDefs.push('  order?: number;');
-    typeDefs.push('  obj?: T;');
-    typeDefs.push('  data?: string;');
-    typeDefs.push('  conversionError?: string;');
-  } else {
-    typeDefs.push('  name?: string;');
-    typeDefs.push('  flags?: number;');
-    typeDefs.push('  junk?: number;');
-    typeDefs.push('  order?: number;');
-    typeDefs.push('  obj?: T;');
-    typeDefs.push('  data?: string;');
-    typeDefs.push('  conversion_error?: string;');
-  }
+  typeDefs.push('  name?: string;');
+  typeDefs.push('  flags?: number;');
+  typeDefs.push('  junk?: number;');
+  typeDefs.push('  order?: number;');
+  typeDefs.push('  obj?: T;');
+  typeDefs.push('  data?: string;');
+  typeDefs.push('  conversion_error?: string;');
   typeDefs.push('}');
   typeDefs.push('');
   
@@ -152,15 +142,9 @@ export function generateTypesFromSpecs(
   typeDefs.push(' * Resource fork metadata');
   typeDefs.push(' */');
   typeDefs.push('export interface ResourceForkMetadata {');
-  if (useCamelCase) {
-    typeDefs.push('  junk1: number;');
-    typeDefs.push('  junk2: number;');
-    typeDefs.push('  fileAttributes: number;');
-  } else {
-    typeDefs.push('  junk1: number;');
-    typeDefs.push('  junk2: number;');
-    typeDefs.push('  file_attributes: number;');
-  }
+  typeDefs.push('  junk1: number;');
+  typeDefs.push('  junk2: number;');
+  typeDefs.push('  file_attributes: number;');
   typeDefs.push('  [key: string]: unknown;');
   typeDefs.push('}');
   typeDefs.push('');
@@ -170,11 +154,7 @@ export function generateTypesFromSpecs(
   typeDefs.push(' * Root resource fork JSON structure');
   typeDefs.push(' */');
   typeDefs.push('export interface ResourceForkJson {');
-  if (useCamelCase) {
-    typeDefs.push('  _metadata: ResourceForkMetadata;');
-  } else {
-    typeDefs.push('  _metadata: ResourceForkMetadata;');
-  }
+  typeDefs.push('  _metadata: ResourceForkMetadata;');
   typeDefs.push('  [resourceType: string]: unknown;');
   typeDefs.push('}');
   
@@ -186,10 +166,9 @@ export function generateTypesFromSpecs(
  */
 export async function writeGeneratedTypes(
   specs: Map<string, string>,
-  outputPath: string,
-  useCamelCase: boolean = true
+  outputPath: string
 ): Promise<Result<void, string>> {
-  const typesResult = generateTypesFromSpecs(specs, useCamelCase);
+  const typesResult = generateTypesFromSpecs(specs);
   
   if (!isOk(typesResult)) {
     return typesResult;
