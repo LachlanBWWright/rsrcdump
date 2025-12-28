@@ -242,6 +242,7 @@ export function resourceForkToJsonString(
   excludeTypes: Uint8Array[] = [],
   converters: Map<string, ResourceConverter>,
   metadata: Record<string, unknown> = {},
+  options: JsonOptions = {}
 ): Result<string, string> {
   const jsonResult = resourceForkToJson(
     fork,
@@ -249,6 +250,7 @@ export function resourceForkToJsonString(
     excludeTypes,
     converters,
     metadata,
+    options,
   );
 
   if (!jsonResult.ok) {

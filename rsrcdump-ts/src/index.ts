@@ -7,7 +7,7 @@ import { readFile } from "fs/promises";
 import type { ResourceFork } from "./resfork.js";
 import { resourceForkFromBytes, packResourceFork } from "./resfork.js";
 import { unpackAdf, packAdf, ADF_ENTRYNUM_RESOURCEFORK } from "./adf.js";
-import { resourceForkToJsonString, jsonToResourceFork } from "./jsonio.js";
+import { resourceForkToJsonString, jsonToResourceFork, type JsonOptions } from "./jsonio.js";
 import { getStandardConverters, StructConverter } from "./resconverters.js";
 import {
   structTemplateFromString,
@@ -131,6 +131,7 @@ export async function saveToJson(
   structSpecs: string[] = [],
   includeTypes: string[] = [],
   excludeTypes: string[] = [],
+  options?: JsonOptions,
 ): Promise<Result<string, string>> {
   const loadResult = await load(data);
   if (!loadResult.ok) {
@@ -148,6 +149,8 @@ export async function saveToJson(
     includeTypeBytes,
     excludeTypeBytes,
     converters,
+    {},
+    options,
   );
 }
 

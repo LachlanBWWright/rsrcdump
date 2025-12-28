@@ -321,8 +321,8 @@ describe("Integration Tests", () => {
         expect(origPack.ok).toBe(true);
         if (!origPack.ok) return;
 
-        // Convert via JSON and get packed bytes (no ADF wrapper)
-        const jsonRes = await saveToJson(new Uint8Array(rawData), structSpecs);
+        // Convert via JSON and get packed bytes (no ADF wrapper, disable backtick arrays for byte-perfect round-trip)
+        const jsonRes = await saveToJson(new Uint8Array(rawData), structSpecs, [], [], { useBacktickArrays: false });
         expect(isOk(jsonRes)).toBe(true);
         if (!isOk(jsonRes)) return;
         

@@ -129,10 +129,13 @@ describe("rsrcdump-ts", () => {
 
       const fork = loadResult.value;
 
-      // Convert to JSON
+      // Convert to JSON (disable backtick arrays for byte-perfect round-trip)
       const jsonResult = await saveToJson(
         new Uint8Array(originalData),
         structSpecs,
+        [],
+        [],
+        { useBacktickArrays: false },
       );
       expect(isOk(jsonResult)).toBe(true);
 
