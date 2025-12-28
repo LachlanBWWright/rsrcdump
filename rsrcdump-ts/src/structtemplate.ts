@@ -118,10 +118,15 @@ export function structTemplateFromString(template: string): Result<StructTemplat
       const baseName = field.slice(0, indexPos);
       const fieldValues = baseName.split('`');
 
-      // Check if this is a backtick macro (contains `)
-      if (baseName.includes('`')) {
+      // Check if this is an array macro (single field or backtick macro)
+      // Single field with repeat > 1: values[4] -> treat as array
+      // Backtick with any repeat: x`y[1] or x`y[2] -> treat as array of objects
+      const isBacktickMacro = baseName.includes('`');
+      if (repeatCount > 1 || isBacktickMacro) {
+        // Store the base name without backticks for single-field arrays
+        const groupBaseName = fieldValues.length === 1 ? (fieldValues[0] || baseName) : baseName;
         backtickGroups.push({
-          baseName,
+          baseName: groupBaseName,
           startIndex: currentFieldIndex,
           count: repeatCount,
           fieldsPerItem: fieldValues.length
