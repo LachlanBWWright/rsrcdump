@@ -5,6 +5,7 @@ This guide shows how to use `rsrcdump-ts` in browser applications.
 ## Table of Contents
 
 - [Overview](#overview)
+- [Zero Node.js Dependencies](#zero-nodejs-dependencies)
 - [Installation](#installation)
 - [Basic Usage](#basic-usage)
 - [File Loading](#file-loading)
@@ -17,7 +18,7 @@ This guide shows how to use `rsrcdump-ts` in browser applications.
 
 ## Overview
 
-`rsrcdump-ts` is fully browser-compatible with zero Node.js dependencies. It works with:
+`rsrcdump-ts` is fully browser-compatible with **zero Node.js dependencies**. It works with:
 
 - ✅ Modern browsers (ES2020+)
 - ✅ React
@@ -28,6 +29,26 @@ This guide shows how to use `rsrcdump-ts` in browser applications.
 - ✅ Vite
 - ✅ Parcel
 - ✅ Rollup
+
+## Zero Node.js Dependencies
+
+The core library uses **only browser-compatible APIs**:
+
+- ✅ **No `fs` module** - API accepts `Uint8Array` instead of file paths
+- ✅ **No `Buffer` API** - Uses `Uint8Array`, `DataView`, and standard JavaScript
+- ✅ **No `path` module** - Path handling done by caller
+- ✅ **No `process` global** - Pure JavaScript
+- ✅ **No `require()`** - ESM modules only
+
+All binary operations use browser-native:
+- `Uint8Array` and `DataView` for binary data
+- `TextEncoder` / `TextDecoder` for text encoding
+- `String.fromCharCode()` for latin1 encoding
+
+You can verify browser compatibility:
+```bash
+npm run verify:browser
+```
 
 ## Installation
 
