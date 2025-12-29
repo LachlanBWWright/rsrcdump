@@ -1,6 +1,32 @@
 # New Features Documentation
 
-This document describes the new features added to rsrcdump-ts in response to user requirements.
+This document describes the new features added to rsrcdump-ts.
+
+## 🌐 Browser Compatibility
+
+### Overview
+The package is now **fully browser-compatible** with zero Node.js dependencies in the core library.
+
+### What Changed
+- **`load()`**: Now only accepts `Uint8Array` (removed file path support)
+- **`parseJsonSpecs()`**: Accepts parsed JSON data (removed `loadJsonSpecs()` with file paths)
+- **Type generation**: Returns string (removed `writeGeneratedTypes()` that wrote to file)
+- **CLI**: Remains Node.js-only (uses `fs` internally)
+
+### Browser Usage
+```typescript
+// Load file using File API
+const file = await fileInput.files[0].arrayBuffer();
+const data = new Uint8Array(file);
+const result = load(data);  // Now synchronous!
+
+if (isOk(result)) {
+  const fork = result.value;
+  // Use the fork...
+}
+```
+
+See [BROWSER.md](./BROWSER.md) for complete integration guide and examples.
 
 ## Feature 1: TypeScript Type Generation
 
@@ -9,11 +35,11 @@ Generate TypeScript type definitions (`.d.ts` files) from struct specs, describi
 
 ### Module
 - `src/typegen.ts`
-- `src/typegen.test.ts` (10 tests, all passing)
+- `src/typegen.test.ts` (9 tests, all passing)
 
 ### Key Functions
 
-#### `generateTypesFromSpecs(specs, useCamelCase)`
+#### `generateTypesFromSpecs(specs)`
 Generates TypeScript type definitions for all struct specs in a map.
 
 ```typescript
@@ -22,21 +48,19 @@ const specs = new Map<string, string>([
   ['Itms', '>HH+:x,y']
 ]);
 
-const result = generateTypesFromSpecs(specs, true);
+const result = generateTypesFromSpecs(specs);
 if (isOk(result)) {
   console.log(result.value); // TypeScript type definitions
+  // Save it yourself if needed (browser or Node.js)
 }
 ```
 
-#### `generateTypeFromTemplate(template, typeName, useCamelCase)`
+#### `generateTypeFromTemplate(template, typeName)`
 Generates a single type definition from a struct template.
-
-#### `writeGeneratedTypes(specs, outputPath, useCamelCase)`
-Writes generated types to a file.
 
 ### Features
 - Generates full TypeScript interfaces for struct records
-- Supports both camelCase and snake_case field names
+- Uses snake_case field names (matching JSON output)
 - Handles list types (arrays)
 - Handles scalar types (single values)
 - Includes ResourceWrapper and metadata types

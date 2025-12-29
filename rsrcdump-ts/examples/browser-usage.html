@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>rsrcdump-ts Browser Example</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      max-width: 900px;
+      margin: 40px auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    .container {
+      background: white;
+      padding: 30px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    h1 {
+      color: #333;
+      border-bottom: 3px solid #007bff;
+      padding-bottom: 10px;
+    }
+    .section {
+      margin: 30px 0;
+    }
+    .file-input {
+      padding: 10px;
+      border: 2px dashed #ddd;
+      border-radius: 5px;
+      cursor: pointer;
+      background: #fafafa;
+      display: inline-block;
+    }
+    .file-input:hover {
+      border-color: #007bff;
+      background: #f0f8ff;
+    }
+    button {
+      background: #007bff;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 16px;
+      margin: 5px;
+    }
+    button:hover {
+      background: #0056b3;
+    }
+    button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+    .output {
+      background: #f8f9fa;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+      padding: 15px;
+      margin-top: 15px;
+      font-family: 'Courier New', monospace;
+      font-size: 14px;
+      white-space: pre-wrap;
+      max-height: 400px;
+      overflow-y: auto;
+    }
+    .error {
+      color: #dc3545;
+      background: #f8d7da;
+      border-color: #f5c6cb;
+    }
+    .success {
+      color: #155724;
+      background: #d4edda;
+      border-color: #c3e6cb;
+    }
+    .info {
+      margin: 10px 0;
+      padding: 10px;
+      background: #e7f3ff;
+      border-left: 4px solid #007bff;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🍎 rsrcdump-ts Browser Demo</h1>
+    
+    <div class="info">
+      <strong>Browser-Compatible Resource Fork Parser</strong><br>
+      This demo runs entirely in your browser with zero server dependencies.
+    </div>
+
+    <div class="section">
+      <h2>1. Load Resource Fork File</h2>
+      <div class="file-input">
+        <label for="fileInput" style="cursor: pointer;">
+          📁 Choose .rsrc file
+          <input type="file" id="fileInput" accept=".rsrc" style="display:none;">
+        </label>
+      </div>
+      <div id="fileInfo" class="output" style="display:none;"></div>
+    </div>
+
+    <div class="section">
+      <h2>2. Parse & Display</h2>
+      <button id="parseBtn" disabled>Parse Resource Fork</button>
+      <button id="toJsonBtn" disabled>Convert to JSON</button>
+      <button id="downloadJsonBtn" disabled>Download JSON</button>
+      <div id="output" class="output" style="display:none;"></div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { 
+      load, 
+      saveToJson, 
+      isOk, 
+      resourceForkToString 
+    } from '@lachlanwright/rsrcdump-ts';
+
+    let fileData = null;
+    let parsedFork = null;
+    let jsonString = null;
+
+    const fileInput = document.getElementById('fileInput');
+    const fileInfo = document.getElementById('fileInfo');
+    const parseBtn = document.getElementById('parseBtn');
+    const toJsonBtn = document.getElementById('toJsonBtn');
+    const downloadJsonBtn = document.getElementById('downloadJsonBtn');
+    const output = document.getElementById('output');
+
+    // Handle file selection
+    fileInput.addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      try {
+        const arrayBuffer = await file.arrayBuffer();
+        fileData = new Uint8Array(arrayBuffer);
+        
+        fileInfo.style.display = 'block';
+        fileInfo.className = 'output success';
+        fileInfo.textContent = `✓ Loaded: ${file.name} (${fileData.length.toLocaleString()} bytes)`;
+        
+        parseBtn.disabled = false;
+        output.style.display = 'none';
+      } catch (err) {
+        fileInfo.style.display = 'block';
+        fileInfo.className = 'output error';
+        fileInfo.textContent = `✗ Error loading file: ${err.message}`;
+        parseBtn.disabled = true;
+      }
+    });
+
+    // Parse resource fork
+    parseBtn.addEventListener('click', () => {
+      try {
+        const result = load(fileData);
+        
+        if (!isOk(result)) {
+          output.style.display = 'block';
+          output.className = 'output error';
+          output.textContent = `✗ Parse Error: ${result.error}`;
+          return;
+        }
+
+        parsedFork = result.value;
+        const description = resourceForkToString(parsedFork);
+        
+        // Count resources
+        let totalResources = 0;
+        for (const typeMap of parsedFork.tree.values()) {
+          totalResources += typeMap.size;
+        }
+
+        output.style.display = 'block';
+        output.className = 'output success';
+        output.textContent = 
+          `✓ Successfully parsed!\n\n` +
+          `${description}\n\n` +
+          `Total resource types: ${parsedFork.tree.size}\n` +
+          `Total resources: ${totalResources}`;
+        
+        toJsonBtn.disabled = false;
+      } catch (err) {
+        output.style.display = 'block';
+        output.className = 'output error';
+        output.textContent = `✗ Error: ${err.message}`;
+      }
+    });
+
+    // Convert to JSON
+    toJsonBtn.addEventListener('click', async () => {
+      try {
+        const result = await saveToJson(fileData, [], [], []);
+        
+        if (!isOk(result)) {
+          output.style.display = 'block';
+          output.className = 'output error';
+          output.textContent = `✗ JSON Conversion Error: ${result.error}`;
+          return;
+        }
+
+        jsonString = result.value;
+        const parsed = JSON.parse(jsonString);
+        
+        output.style.display = 'block';
+        output.className = 'output success';
+        output.textContent = 
+          `✓ Converted to JSON!\n\n` +
+          `JSON size: ${jsonString.length.toLocaleString()} characters\n` +
+          `Resource types: ${Object.keys(parsed).filter(k => !k.startsWith('_')).join(', ')}\n\n` +
+          `Preview (first 500 chars):\n` +
+          jsonString.substring(0, 500) + '...';
+        
+        downloadJsonBtn.disabled = false;
+      } catch (err) {
+        output.style.display = 'block';
+        output.className = 'output error';
+        output.textContent = `✗ Error: ${err.message}`;
+      }
+    });
+
+    // Download JSON
+    downloadJsonBtn.addEventListener('click', () => {
+      const blob = new Blob([jsonString], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'resource_fork.json';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      output.style.display = 'block';
+      output.className = 'output success';
+      output.textContent = `✓ JSON file downloaded!`;
+    });
+  </script>
+</body>
+</html>
