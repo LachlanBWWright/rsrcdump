@@ -58,9 +58,9 @@ describe("Integration Tests", () => {
         throw new Error(`loadBytesFromJson failed: ${bytesRes.error}`);
       }
 
-      const originalLoad = await load(new Uint8Array(data));
+      const originalLoad = load(new Uint8Array(data));
       if (!isOk(originalLoad)) throw new Error("original load failed");
-      const regenLoad = await load(bytesRes.value);
+      const regenLoad = load(bytesRes.value);
       if (!isOk(regenLoad)) throw new Error("regen load failed");
 
       // Compare per-type counts and throw a clear message on first mismatch
@@ -87,7 +87,8 @@ describe("Integration Tests", () => {
     });
     it("should complete full extract-create cycle", async () => {
       // Step 1: Load the original file
-      const loadResult = await load("../EarthFarm.ter.rsrc");
+      const data = await readFile("../EarthFarm.ter.rsrc");
+      const loadResult = load(new Uint8Array(data));
       expect(isOk(loadResult)).toBe(true);
 
       if (!isOk(loadResult)) return;
@@ -98,7 +99,6 @@ describe("Integration Tests", () => {
       ).reduce((sum, map) => sum + map.size, 0);
 
       // Step 2: Convert to JSON
-      const data = await readFile("../EarthFarm.ter.rsrc");
       const jsonResult = await saveToJson(new Uint8Array(data), structSpecs);
       expect(isOk(jsonResult)).toBe(true);
 
@@ -585,7 +585,8 @@ describe("Integration Tests", () => {
 
   describe("Resource Type Handling", () => {
     it("should handle all resource types correctly", async () => {
-      const result = await load("../EarthFarm.ter.rsrc");
+      const fileData = await readFile("../EarthFarm.ter.rsrc");
+      const result = load(new Uint8Array(fileData));
       expect(isOk(result)).toBe(true);
 
       if (!isOk(result)) return;
@@ -625,7 +626,8 @@ describe("Integration Tests", () => {
     });
 
     it("should preserve resource order", async () => {
-      const result = await load("../EarthFarm.ter.rsrc");
+      const fileData = await readFile("../EarthFarm.ter.rsrc");
+      const result = load(new Uint8Array(fileData));
       expect(isOk(result)).toBe(true);
 
       if (!isOk(result)) return;
@@ -667,12 +669,13 @@ describe("Integration Tests", () => {
     });
 
     it("should fall back to base16 for unknown types", async () => {
-      const result = await load("../EarthFarm.ter.rsrc");
+      const fileData = await readFile("../EarthFarm.ter.rsrc");
+      const result = load(new Uint8Array(fileData));
       expect(isOk(result)).toBe(true);
 
       if (!isOk(result)) return;
 
-      const data = new Uint8Array(await readFile("../EarthFarm.ter.rsrc"));
+      const data = new Uint8Array(fileData);
 
       const jsonResult = await saveToJson(data, structSpecs);
       expect(isOk(jsonResult)).toBe(true);
@@ -728,7 +731,8 @@ describe("Integration Tests", () => {
 
   describe("String Representation", () => {
     it("should produce readable resource fork description", async () => {
-      const result = await load("../EarthFarm.ter.rsrc");
+      const fileData = await readFile("../EarthFarm.ter.rsrc");
+      const result = load(new Uint8Array(fileData));
       expect(isOk(result)).toBe(true);
 
       if (!isOk(result)) return;

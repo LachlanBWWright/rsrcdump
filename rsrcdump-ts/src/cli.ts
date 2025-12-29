@@ -98,7 +98,8 @@ async function main() {
     }
 
     try {
-      const result = await load(inputPath);
+      const fileData = await readFile(inputPath);
+      const result = load(new Uint8Array(fileData));
 
       if (!isOk(result)) {
         console.error('Error:', result.error);

@@ -22,9 +22,11 @@ beforeAll(async () => {
 
 describe("Performance", () => {
   it("should load resource fork in reasonable time", async () => {
+    const fileData = await readFile("../EarthFarm.ter.rsrc");
+    
     const start = Date.now();
 
-    const result = await load("../EarthFarm.ter.rsrc");
+    const result = load(new Uint8Array(fileData));
 
     const elapsed = Date.now() - start;
 
@@ -99,9 +101,11 @@ describe("Performance", () => {
     const iterations = 10;
     const times: number[] = [];
 
+    const fileData = await readFile("../EarthFarm.ter.rsrc");
+    
     for (let i = 0; i < iterations; i++) {
       const start = Date.now();
-      const result = await load("../EarthFarm.ter.rsrc");
+      const result = load(new Uint8Array(fileData));
       const elapsed = Date.now() - start;
 
       expect(isOk(result)).toBe(true);
@@ -121,7 +125,8 @@ describe("Performance", () => {
   });
 
   it("should handle large resource efficiently", async () => {
-    const result = await load("../EarthFarm.ter.rsrc");
+    const fileData = await readFile("../EarthFarm.ter.rsrc");
+    const result = load(new Uint8Array(fileData));
     expect(isOk(result)).toBe(true);
 
     if (!isOk(result)) return;

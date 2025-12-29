@@ -147,18 +147,12 @@ export function jsonSpecsToStrings(
 }
 
 /**
- * Loads struct specs from a JSON file
+ * Parses struct specs from JSON data
+ * For browser compatibility, accepts parsed JSON data rather than file path.
+ * Load the JSON file yourself and pass the parsed array to this function.
  */
-export async function loadJsonSpecs(
-  filePath: string
-): Promise<Result<Map<string, string>, string>> {
-  try {
-    const fs = await import('fs/promises');
-    const content = await fs.readFile(filePath, 'utf-8');
-    const specs = JSON.parse(content) as StructSpecJson[];
-    
-    return jsonSpecsToStrings(specs);
-  } catch (e) {
-    return err(`Failed to load JSON specs: ${e}`);
-  }
+export function parseJsonSpecs(
+  specs: StructSpecJson[]
+): Result<Map<string, string>, string> {
+  return jsonSpecsToStrings(specs);
 }

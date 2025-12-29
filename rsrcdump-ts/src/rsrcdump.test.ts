@@ -24,7 +24,8 @@ beforeAll(async () => {
 describe("rsrcdump-ts", () => {
   describe("Resource Fork Loading", () => {
     it("should load EarthFarm.ter.rsrc", async () => {
-      const result = await load("../EarthFarm.ter.rsrc");
+      const fileData = await readFile("../EarthFarm.ter.rsrc");
+      const result = load(new Uint8Array(fileData));
       expect(isOk(result)).toBe(true);
 
       if (!isOk(result)) return;
@@ -36,14 +37,18 @@ describe("rsrcdump-ts", () => {
       const hedrKey = Buffer.from("Hedr", "binary").toString("binary");
       expect(fork.tree.has(hedrKey)).toBe(true);
 
-      const hedrMap = fork.tree.get(hedrKey)!;
+      const hedrMap = fork.tree.get(hedrKey);
+      expect(hedrMap).toBeDefined();
+      if (!hedrMap) return;
       expect(hedrMap.size).toBeGreaterThan(0);
 
       // Check for a known resource id if present in this sample
       expect(hedrMap.has(1000)).toBe(true);
 
       // Verify structure of a sample resource
-      const sample = hedrMap.get(1000)!;
+      const sample = hedrMap.get(1000);
+      expect(sample).toBeDefined();
+      if (!sample) return;
       expect(sample).toEqual(
         expect.objectContaining({
           num: 1000,
@@ -54,9 +59,9 @@ describe("rsrcdump-ts", () => {
       expect(sample.data.length).toBeGreaterThan(0);
     });
 
-    it("should handle empty resource fork", async () => {
+    it("should handle empty resource fork", () => {
       const emptyData = new Uint8Array(0);
-      const result = await load(emptyData);
+      const result = load(emptyData);
       expect(isOk(result)).toBe(true);
 
       if (isOk(result)) {
@@ -122,7 +127,7 @@ describe("rsrcdump-ts", () => {
     it("should preserve binary data in round-trip", async () => {
       // Load original file
       const originalData = await readFile("../EarthFarm.ter.rsrc");
-      const loadResult = await load(new Uint8Array(originalData));
+      const loadResult = load(new Uint8Array(originalData));
       expect(isOk(loadResult)).toBe(true);
 
       if (!isOk(loadResult)) return;
@@ -268,8 +273,10 @@ describe("rsrcdump-ts", () => {
       }
     });
 
-    it("should handle non-existent file gracefully", async () => {
-      const result = await load("/nonexistent/file.rsrc");
+    it("should handle invalid data gracefully", () => {
+      // Test with corrupted/invalid data
+      const invalidData = new Uint8Array([0xff, 0xff, 0xff, 0xff]);
+      const result = load(invalidData);
       expect(isOk(result)).toBe(false);
 
       if (!isOk(result)) {

@@ -161,24 +161,6 @@ export function generateTypesFromSpecs(
   return ok(typeDefs.join('\n'));
 }
 
-/**
- * Writes generated types to a file
- */
-export async function writeGeneratedTypes(
-  specs: Map<string, string>,
-  outputPath: string
-): Promise<Result<void, string>> {
-  const typesResult = generateTypesFromSpecs(specs);
-  
-  if (!isOk(typesResult)) {
-    return typesResult;
-  }
-  
-  try {
-    const fs = await import('fs/promises');
-    await fs.writeFile(outputPath, typesResult.value, 'utf-8');
-    return ok(undefined);
-  } catch (e) {
-    return err(`Failed to write types: ${e}`);
-  }
-}
+// Note: writeGeneratedTypes() has been removed for browser compatibility.
+// Use generateTypesFromSpecs() to get the generated types as a string,
+// then save them yourself if needed.

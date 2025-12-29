@@ -3,7 +3,6 @@
  * TypeScript port of rsrcdump with Result/Err error handling
  */
 
-import { readFile } from "fs/promises";
 import type { ResourceFork } from "./resfork.js";
 import { resourceForkFromBytes, packResourceFork } from "./resfork.js";
 import { unpackAdf, packAdf, ADF_ENTRYNUM_RESOURCEFORK } from "./adf.js";
@@ -15,7 +14,7 @@ import {
 } from "./structtemplate.js";
 import { parseTypeName } from "./textio.js";
 import type { Result } from "./result.js";
-import { ok, err, isOk } from "./result.js";
+import { ok, isOk } from "./result.js";
 
 export type { Ok, Err, Result } from "./result.js";
 export { ok, err, isOk, isErr, unwrap, map, andThen } from "./result.js";
@@ -76,7 +75,6 @@ export {
 export {
   generateTypesFromSpecs,
   generateTypeFromTemplate,
-  writeGeneratedTypes,
 } from "./typegen.js";
 
 // JSON struct specs
@@ -84,31 +82,20 @@ export type { StructSpecJson, StructFieldJson } from "./jsonspecs.js";
 export {
   jsonSpecToString,
   jsonSpecsToStrings,
-  loadJsonSpecs,
+  parseJsonSpecs,
 } from "./jsonspecs.js";
 
 // JSON options
 export type { JsonOptions } from "./jsonio.js";
 
 /**
- * Loads a resource fork from a file path or bytes
+ * Loads a resource fork from bytes
+ * For browser compatibility, this function only accepts Uint8Array.
+ * Use your own file reading mechanism to load data first.
  */
-export async function load(
-  pathOrData: string | Uint8Array,
-): Promise<Result<ResourceFork, string>> {
-  let data: Uint8Array;
-
-  if (typeof pathOrData === "string") {
-    try {
-      const buffer = await readFile(pathOrData);
-      data = new Uint8Array(buffer);
-    } catch (e) {
-      return err(`Failed to read file: ${e}`);
-    }
-  } else {
-    data = pathOrData;
-  }
-
+export function load(
+  data: Uint8Array,
+): Result<ResourceFork, string> {
   // Try to unpack as ADF first
   const adfResult = unpackAdf(data);
   if (isOk(adfResult)) {
@@ -124,7 +111,7 @@ export async function load(
 }
 
 /**
- * Saves a resource fork to JSON
+ * Converts a resource fork to JSON string
  */
 export async function saveToJson(
   data: Uint8Array,
@@ -133,7 +120,7 @@ export async function saveToJson(
   excludeTypes: string[] = [],
   options?: JsonOptions,
 ): Promise<Result<string, string>> {
-  const loadResult = await load(data);
+  const loadResult = load(data);
   if (!loadResult.ok) {
     return loadResult;
   }
