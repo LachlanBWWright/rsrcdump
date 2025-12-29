@@ -19,15 +19,20 @@ export class Unpacker {
   /**
    * Unpack data using a format string
    * Format: '>' for big-endian, followed by type chars:
+   * - c: char (1 byte)
    * - B: unsigned byte
    * - b: signed byte
    * - ?: boolean (1 byte: 0=false, 1=true)
+   * - e: half-precision float (2 bytes)
    * - H: unsigned short (2 bytes)
    * - h: signed short (2 bytes)
    * - L: unsigned long (4 bytes)
    * - l/i: signed long (4 bytes)
    * - Q: unsigned long long (8 bytes)
    * - q: signed long long (8 bytes)
+   * - n: ssize_t (8 bytes on 64-bit)
+   * - N: size_t (8 bytes on 64-bit)
+   * - P: pointer (8 bytes on 64-bit)
    * - f: float (4 bytes)
    * - d: double (8 bytes)
    * - Ns: N bytes as Uint8Array
@@ -84,6 +89,12 @@ export class Unpacker {
           this.data.slice(this.offset + pos, this.offset + pos + count),
         );
         pos += count;
+      } else if (type === "c") {
+        // char (1 byte) - returns as Uint8Array
+        for (let j = 0; j < count; j++) {
+          values.push(this.data.slice(this.offset + pos, this.offset + pos + 1));
+          pos += 1;
+        }
       } else if (type === "B") {
         for (let j = 0; j < count; j++) {
           values.push(view.getUint8(pos));
@@ -98,6 +109,25 @@ export class Unpacker {
         for (let j = 0; j < count; j++) {
           values.push(view.getUint8(pos) !== 0);
           pos += 1;
+        }
+      } else if (type === "e") {
+        // Half-precision float (2 bytes) - convert to full float
+        for (let j = 0; j < count; j++) {
+          const half = view.getUint16(pos, littleEndian);
+          // Convert float16 to float32
+          const sign = (half & 0x8000) >> 15;
+          const exp = (half & 0x7c00) >> 10;
+          const frac = half & 0x03ff;
+          let val: number;
+          if (exp === 0) {
+            val = (sign ? -1 : 1) * Math.pow(2, -14) * (frac / 1024);
+          } else if (exp === 0x1f) {
+            val = frac ? NaN : (sign ? -Infinity : Infinity);
+          } else {
+            val = (sign ? -1 : 1) * Math.pow(2, exp - 15) * (1 + frac / 1024);
+          }
+          values.push(val);
+          pos += 2;
         }
       } else if (type === "H") {
         for (let j = 0; j < count; j++) {
@@ -127,6 +157,24 @@ export class Unpacker {
       } else if (type === "q") {
         for (let j = 0; j < count; j++) {
           values.push(Number(view.getBigInt64(pos, littleEndian)));
+          pos += 8;
+        }
+      } else if (type === "n") {
+        // ssize_t - treat as signed 64-bit on 64-bit platforms
+        for (let j = 0; j < count; j++) {
+          values.push(Number(view.getBigInt64(pos, littleEndian)));
+          pos += 8;
+        }
+      } else if (type === "N") {
+        // size_t - treat as unsigned 64-bit on 64-bit platforms
+        for (let j = 0; j < count; j++) {
+          values.push(Number(view.getBigUint64(pos, littleEndian)));
+          pos += 8;
+        }
+      } else if (type === "P") {
+        // void * - treat as unsigned 64-bit on 64-bit platforms
+        for (let j = 0; j < count; j++) {
+          values.push(Number(view.getBigUint64(pos, littleEndian)));
           pos += 8;
         }
       } else if (type === "f") {
@@ -248,6 +296,12 @@ export class Packer {
         for (let j = 0; j < count; j++) {
           bytes.push(j < val.length ? val[j]! : 0);
         }
+      } else if (type === "c") {
+        // char (1 byte) - expects Uint8Array values
+        for (let j = 0; j < count; j++) {
+          const val = values[valueIdx++] as Uint8Array;
+          bytes.push(val.length > 0 ? val[0]! : 0);
+        }
       } else if (type === "B") {
         for (let j = 0; j < count; j++) {
           bytes.push((values[valueIdx++] as number) & 0xff);
@@ -261,6 +315,39 @@ export class Packer {
         for (let j = 0; j < count; j++) {
           const val = values[valueIdx++];
           bytes.push(val ? 1 : 0);
+        }
+      } else if (type === "e") {
+        // Half-precision float (2 bytes) - convert from full float
+        for (let j = 0; j < count; j++) {
+          const val = values[valueIdx++] as number;
+          // Convert float32 to float16
+          const buffer = new ArrayBuffer(4);
+          const view = new DataView(buffer);
+          view.setFloat32(0, val, false);
+          const f32 = view.getUint32(0, false);
+          const sign = (f32 >> 31) & 0x1;
+          const exp = (f32 >> 23) & 0xff;
+          const frac = f32 & 0x7fffff;
+          let f16: number;
+          if (exp === 0) {
+            f16 = (sign << 15);
+          } else if (exp === 0xff) {
+            f16 = (sign << 15) | 0x7c00 | (frac ? 1 : 0);
+          } else {
+            const newExp = exp - 127 + 15;
+            if (newExp >= 31) {
+              f16 = (sign << 15) | 0x7c00;
+            } else if (newExp <= 0) {
+              f16 = (sign << 15);
+            } else {
+              f16 = (sign << 15) | (newExp << 10) | (frac >> 13);
+            }
+          }
+          if (littleEndian) {
+            bytes.push(f16 & 0xff, (f16 >> 8) & 0xff);
+          } else {
+            bytes.push((f16 >> 8) & 0xff, f16 & 0xff);
+          }
         }
       } else if (type === "H") {
         for (let j = 0; j < count; j++) {
@@ -318,6 +405,30 @@ export class Packer {
               (val >> 8) & 0xff,
               val & 0xff,
             );
+          }
+        }
+      } else if (type === "n") {
+        // ssize_t - treat as signed 64-bit on 64-bit platforms
+        for (let j = 0; j < count; j++) {
+          const val = values[valueIdx++] as bigint | number;
+          const bigVal = typeof val === 'bigint' ? val : BigInt(val);
+          const buffer = new ArrayBuffer(8);
+          const view = new DataView(buffer);
+          view.setBigInt64(0, bigVal, littleEndian);
+          for (let k = 0; k < 8; k++) {
+            bytes.push(view.getUint8(k));
+          }
+        }
+      } else if (type === "N" || type === "P") {
+        // size_t and void * - treat as unsigned 64-bit on 64-bit platforms
+        for (let j = 0; j < count; j++) {
+          const val = values[valueIdx++] as bigint | number;
+          const bigVal = typeof val === 'bigint' ? val : BigInt(val);
+          const buffer = new ArrayBuffer(8);
+          const view = new DataView(buffer);
+          view.setBigUint64(0, bigVal, littleEndian);
+          for (let k = 0; k < 8; k++) {
+            bytes.push(view.getUint8(k));
           }
         }
       } else if (type === "f") {
@@ -407,8 +518,8 @@ export class WritePlaceholder {
       const type = fmt[i];
       if (type === undefined) break;
 
-      if (type === "x" || type === "B" || type === "b" || type === "?") size += count;
-      else if (type === "H" || type === "h") size += 2 * count;
+      if (type === "x" || type === "c" || type === "B" || type === "b" || type === "?") size += count;
+      else if (type === "e" || type === "H" || type === "h") size += 2 * count;
       else if (
         type === "L" ||
         type === "I" ||
@@ -417,7 +528,7 @@ export class WritePlaceholder {
         type === "f"
       )
         size += 4 * count;
-      else if (type === "Q" || type === "q" || type === "d") size += 8 * count;
+      else if (type === "Q" || type === "q" || type === "n" || type === "N" || type === "P" || type === "d") size += 8 * count;
       else if (type === "s") size += count;
 
       i++;
@@ -493,8 +604,8 @@ export function calcsize(fmt: string): number {
     const type = fmt[i];
     if (type === undefined) break;
 
-    if (type === "x" || type === "B" || type === "b" || type === "?") size += count;
-    else if (type === "H" || type === "h") size += 2 * count;
+    if (type === "x" || type === "c" || type === "B" || type === "b" || type === "?") size += count;
+    else if (type === "e" || type === "H" || type === "h") size += 2 * count;
     else if (
       type === "L" ||
       type === "I" ||
@@ -503,7 +614,7 @@ export function calcsize(fmt: string): number {
       type === "f"
     )
       size += 4 * count;
-    else if (type === "Q" || type === "q" || type === "d") size += 8 * count;
+    else if (type === "Q" || type === "q" || type === "n" || type === "N" || type === "P" || type === "d") size += 8 * count;
     else if (type === "s") size += count;
 
     i++;
