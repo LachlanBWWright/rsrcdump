@@ -493,7 +493,7 @@ export function calcsize(fmt: string): number {
     const type = fmt[i];
     if (type === undefined) break;
 
-    if (type === "x" || type === "B" || type === "b") size += count;
+    if (type === "x" || type === "B" || type === "b" || type === "?") size += count;
     else if (type === "H" || type === "h") size += 2 * count;
     else if (
       type === "L" ||
