@@ -1,17 +1,22 @@
 {
   "name": "@lachlanbwwright/rsrcdump-ts",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "type": "module",
   "main": "./build/index.js",
   "types": "./build/index.d.ts",
+  "module": "./build/index.js",
+  "browser": "./build/index.js",
+  "sideEffects": false,
   "bin": {
     "rsrcdump-ts": "./bin/rsrcdump-ts.js"
   },
   "exports": {
     ".": {
       "types": "./build/index.d.ts",
-      "import": "./build/index.js"
-    }
+      "import": "./build/index.js",
+      "require": "./build/index.js"
+    },
+    "./package.json": "./package.json"
   },
   "files": [
     "build/**/*.js",
@@ -23,7 +28,9 @@
     "!build/**/*.test.js.map",
     "bin/",
     "README.md",
-    "LICENSE.md"
+    "LICENSE.md",
+    "BROWSER.md",
+    "API.md"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
@@ -50,11 +57,16 @@
     "rsrc",
     "resource",
     "converter",
-    "json"
+    "json",
+    "browser",
+    "typescript",
+    "parser",
+    "binary",
+    "macintosh"
   ],
   "author": "Lachlan Wright",
   "license": "MIT",
-  "description": "TypeScript port of rsrcdump - Extract and convert Mac resource forks with Result/Err error handling",
+  "description": "Browser-compatible TypeScript library for parsing Mac resource forks - Extract and convert with Result/Err error handling",
   "repository": {
     "type": "git",
     "url": "https://github.com/LachlanBWWright/rsrcdump.git",
@@ -63,7 +75,7 @@
   "bugs": {
     "url": "https://github.com/LachlanBWWright/rsrcdump/issues"
   },
-  "homepage": "https://github.com/LachlanBWWright/rsrcdump#readme",
+  "homepage": "https://github.com/LachlanBWWright/rsrcdump/tree/main/rsrcdump-ts#readme",
   "devDependencies": {
     "@types/node": "^25.0.2",
     "@typescript-eslint/eslint-plugin": "^6.6.0",
