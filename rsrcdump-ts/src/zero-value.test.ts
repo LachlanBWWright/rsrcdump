@@ -99,4 +99,30 @@ describe('Zero value handling', () => {
     expect(obj.flag).toBe(false);
     expect('flag' in obj).toBe(true);
   });
+
+  it('should preserve zero values with empty string field names', () => {
+    // Create template where first field has empty name
+    const templateResult = structTemplateFromString('>HH:,field2');
+    expect(templateResult.ok).toBe(true);
+    if (!templateResult.ok) return;
+    
+    const template = templateResult.value;
+    
+    // Pack data with first field = 0, second field = 100
+    const packer = new Packer();
+    const data = packer.pack('>HH', 0, 100);
+    
+    // Unpack - empty field name should get default name
+    const result = unpackRecord(template, data, 0);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    
+    const obj = result.value as Record<string, number>;
+    console.log('Empty name result:', obj);
+    
+    // First field should have fallback name and value should be 0
+    expect(obj['.field0']).toBe(0);
+    expect(obj.field2).toBe(100);
+  });
 });
+

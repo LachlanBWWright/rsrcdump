@@ -234,7 +234,7 @@ function tagValues(template: StructTemplate, values: (number | Uint8Array | bool
             const fieldName = template.fieldNames[valueIndex];
             const value = values[valueIndex];
             
-            if (fieldName && value !== undefined) {
+            if (fieldName != null && value !== undefined) {
               // Extract base field name (remove _N suffix)
               const underscorePos = fieldName.lastIndexOf('_');
               const baseName = underscorePos > 0 ? fieldName.slice(0, underscorePos) : fieldName;
@@ -268,7 +268,7 @@ function tagValues(template: StructTemplate, values: (number | Uint8Array | bool
       
       const name = template.fieldNames[i];
       const value = values[i];
-      if (name && value !== undefined) {
+      if (name != null && value !== undefined) {
         // Convert byte strings to hex for JSON serialization
         if (value instanceof Uint8Array) {
           record[name] = bytesToHex(value);
