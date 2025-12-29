@@ -13,6 +13,7 @@ import {
   structTemplateFromStringWithTypename,
 } from "./structtemplate.js";
 import { parseTypeName } from "./textio.js";
+import { bytesToBinary } from "./buffer-utils.js";
 import type { Result } from "./result.js";
 import { ok, isOk } from "./result.js";
 
@@ -239,7 +240,7 @@ async function getConverters(structSpecs: string[]): Promise<Map<string, any>> {
     const result = await structTemplateFromStringWithTypename(templateArg);
     if (isOk(result)) {
       const { converter, restype } = result.value;
-      const typeKey = Buffer.from(restype).toString("binary");
+      const typeKey = bytesToBinary(restype);
       converters.set(typeKey, new StructConverter(converter));
     }
   }
@@ -276,7 +277,7 @@ function getConvertersSync(structSpecs: string[]): Map<string, any> {
         continue;
       }
 
-      const typeKey = Buffer.from(restype).toString("binary");
+      const typeKey = bytesToBinary(restype);
       converters.set(typeKey, new StructConverter(templateResult.value));
     } catch (e) {
       // Ignore errors during parsing of struct specs
