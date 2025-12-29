@@ -2,6 +2,8 @@
  * Binary packing and unpacking utilities
  */
 
+import { decode as bufDecode, encode as bufEncode, latin1Decode, latin1Encode } from './buffer-utils.js';
+
 /**
  * Unpacker for reading binary data sequentially
  */
@@ -19,6 +21,7 @@ export class Unpacker {
    * Format: '>' for big-endian, followed by type chars:
    * - B: unsigned byte
    * - b: signed byte
+   * - ?: boolean (1 byte: 0=false, 1=true)
    * - H: unsigned short (2 bytes)
    * - h: signed short (2 bytes)
    * - L: unsigned long (4 bytes)
@@ -29,12 +32,12 @@ export class Unpacker {
    * - d: double (8 bytes)
    * - Ns: N bytes as Uint8Array
    */
-  unpack(fmt: string): number[] | (number | Uint8Array)[] {
+  unpack(fmt: string): number[] | (number | Uint8Array | boolean)[] {
     const view = new DataView(
       this.data.buffer,
       this.data.byteOffset + this.offset,
     );
-    const values: (number | Uint8Array)[] = [];
+    const values: (number | Uint8Array | boolean)[] = [];
     let pos = 0;
     let littleEndian = false;
 
@@ -89,6 +92,11 @@ export class Unpacker {
       } else if (type === "b") {
         for (let j = 0; j < count; j++) {
           values.push(view.getInt8(pos));
+          pos += 1;
+        }
+      } else if (type === "?") {
+        for (let j = 0; j < count; j++) {
+          values.push(view.getUint8(pos) !== 0);
           pos += 1;
         }
       } else if (type === "H") {
@@ -169,9 +177,10 @@ export class Unpacker {
     const [length] = this.unpack(">B");
     const bytes = this.read(length as number);
     // Simplified encoding handling
-    return Buffer.from(bytes).toString(
-      encoding === "macroman" ? "latin1" : (encoding as BufferEncoding),
-    );
+    if (encoding === "macroman") {
+      return latin1Decode(bytes);
+    }
+    return bufDecode(bytes, encoding);
   }
 
   eof(): boolean {
@@ -247,6 +256,11 @@ export class Packer {
         for (let j = 0; j < count; j++) {
           const val = values[valueIdx++] as number;
           bytes.push(val < 0 ? val + 256 : val);
+        }
+      } else if (type === "?") {
+        for (let j = 0; j < count; j++) {
+          const val = values[valueIdx++];
+          bytes.push(val ? 1 : 0);
         }
       } else if (type === "H") {
         for (let j = 0; j < count; j++) {
@@ -393,7 +407,7 @@ export class WritePlaceholder {
       const type = fmt[i];
       if (type === undefined) break;
 
-      if (type === "x" || type === "B" || type === "b") size += count;
+      if (type === "x" || type === "B" || type === "b" || type === "?") size += count;
       else if (type === "H" || type === "h") size += 2 * count;
       else if (
         type === "L" ||
@@ -431,10 +445,7 @@ export function packPstr(
   padding: number,
   encoding: string = "macroman",
 ): Uint8Array {
-  const encoded = Buffer.from(
-    text,
-    encoding === "macroman" ? "latin1" : (encoding as BufferEncoding),
-  );
+  const encoded = encoding === "macroman" ? latin1Encode(text) : bufEncode(text, encoding);
   const length = Math.min(encoded.length, 255);
   const padCount = (1 + length) % padding;
 

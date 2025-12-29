@@ -232,20 +232,86 @@ describe('StructTemplate', () => {
     it('should round-trip unnamed fields', () => {
       const result = structTemplateFromString('ii');
       expect(isOk(result)).toBe(true);
-      
+
       if (!isOk(result)) return;
-      
+
       const template = result.value;
       const original = [123, 456];
-      
+
       const packResult = pack(template, original);
       expect(isOk(packResult)).toBe(true);
-      
+
       if (!isOk(packResult)) return;
-      
+
       const unpackResult = unpackRecord(template, packResult.value, 0);
       expect(isOk(unpackResult)).toBe(true);
-      
+
+      if (isOk(unpackResult)) {
+        expect(unpackResult.value).toEqual(original);
+      }
+    });
+
+    it('should round-trip boolean fields with ? type', () => {
+      const result = structTemplateFromString('?H:isEmpty,id');
+      expect(isOk(result)).toBe(true);
+
+      if (!isOk(result)) return;
+
+      const template = result.value;
+      const original = { isEmpty: true, id: 0x0042 };
+
+      const packResult = pack(template, original);
+      expect(isOk(packResult)).toBe(true);
+
+      if (!isOk(packResult)) return;
+
+      const unpackResult = unpackRecord(template, packResult.value, 0);
+      expect(isOk(unpackResult)).toBe(true);
+
+      if (isOk(unpackResult)) {
+        expect(unpackResult.value).toEqual(original);
+      }
+    });
+
+    it('should handle false boolean values', () => {
+      const result = structTemplateFromString('?H:isEmpty,id');
+      expect(isOk(result)).toBe(true);
+
+      if (!isOk(result)) return;
+
+      const template = result.value;
+      const original = { isEmpty: false, id: 0x0100 };
+
+      const packResult = pack(template, original);
+      expect(isOk(packResult)).toBe(true);
+
+      if (!isOk(packResult)) return;
+
+      const unpackResult = unpackRecord(template, packResult.value, 0);
+      expect(isOk(unpackResult)).toBe(true);
+
+      if (isOk(unpackResult)) {
+        expect(unpackResult.value).toEqual(original);
+      }
+    });
+
+    it('should round-trip single boolean field in list format', () => {
+      const result = structTemplateFromString('x?H:isEmpty,id');
+      expect(isOk(result)).toBe(true);
+
+      if (!isOk(result)) return;
+
+      const template = result.value;
+      const original = { isEmpty: true, id: 0x0001 };
+
+      const packResult = pack(template, original);
+      expect(isOk(packResult)).toBe(true);
+
+      if (!isOk(packResult)) return;
+
+      const unpackResult = unpackRecord(template, packResult.value, 0);
+      expect(isOk(unpackResult)).toBe(true);
+
       if (isOk(unpackResult)) {
         expect(unpackResult.value).toEqual(original);
       }

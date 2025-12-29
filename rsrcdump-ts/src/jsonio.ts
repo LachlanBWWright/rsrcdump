@@ -11,6 +11,7 @@ import {
 import { ResourceConverter, Base16Converter } from "./resconverters.js";
 import { decode, encode, parseTypeName } from "./textio.js";
 import { Result, ok, err } from "./result.js";
+import { bytesToBinary, binaryToBytes } from "./buffer-utils.js";
 
 interface ResourceWrapper {
   name?: string;
@@ -61,10 +62,10 @@ export function resourceForkToJson(
   };
 
   const includeTypeKeys = new Set(
-    includeTypes.map((t) => Buffer.from(t).toString("binary")),
+    includeTypes.map((t) => bytesToBinary(t)),
   );
   const excludeTypeKeys = new Set(
-    excludeTypes.map((t) => Buffer.from(t).toString("binary")),
+    excludeTypes.map((t) => bytesToBinary(t)),
   );
 
   for (const [typeKey, typeMap] of fork.tree) {
@@ -75,8 +76,8 @@ export function resourceForkToJson(
       continue;
     }
 
-    const resType = Buffer.from(typeKey, "binary");
-    const resTypeKey = decode(new Uint8Array(resType), "replace");
+    const resType = binaryToBytes(typeKey);
+    const resTypeKey = decode(resType, "replace");
 
     const typeObj: Record<string, ResourceWrapper> = {};
 
@@ -144,10 +145,10 @@ export function jsonToResourceFork(
   fork.junkFilerefnum = metadata.junk2 as number;
 
   const onlyTypeKeys = new Set(
-    onlyTypes.map((t) => Buffer.from(t).toString("binary")),
+    onlyTypes.map((t) => bytesToBinary(t)),
   );
   const skipTypeKeys = new Set(
-    skipTypes.map((t) => Buffer.from(t).toString("binary")),
+    skipTypes.map((t) => bytesToBinary(t)),
   );
 
   for (const [typeName, typeRecords] of Object.entries(jsonBlob)) {
@@ -160,7 +161,7 @@ export function jsonToResourceFork(
     }
 
     const resType = parseTypeName(typeName);
-    const typeKey = Buffer.from(resType).toString("binary");
+    const typeKey = bytesToBinary(resType);
 
     if (skipTypeKeys.has(typeKey)) {
       continue;

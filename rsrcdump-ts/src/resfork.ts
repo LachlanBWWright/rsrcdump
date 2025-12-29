@@ -5,6 +5,7 @@
 import { Unpacker, Packer, calcsize } from './packutils.js';
 import { decode, sanitizeTypeName, parseTypeName } from './textio.js';
 import { Result, ok, err } from './result.js';
+import { bytesToBinary, binaryToBytes } from './buffer-utils.js';
 
 export type ResType = Uint8Array;
 
@@ -110,8 +111,8 @@ export function resourceForkFromBytes(data: Uint8Array): Result<ResourceFork, st
     const resCount = (typeRec[1] as number) + 1;
     const reslistOffset = typeRec[2] as number;
 
-    const typeKey = Buffer.from(resType).toString('binary');
-    
+    const typeKey = bytesToBinary(resType);
+
     if (fork.tree.has(typeKey)) {
       return err(`${typeKey} already seen`);
     }
@@ -173,7 +174,7 @@ export function resourceForkFromBytes(data: Uint8Array): Result<ResourceFork, st
   for (let i = 0; i < order.length; i++) {
     const item = order[i];
     if (!item) continue;
-    const typeKey = Buffer.from(item.type).toString('binary');
+    const typeKey = bytesToBinary(item.type);
     const typeMap = fork.tree.get(typeKey);
     if (typeMap) {
       const res = typeMap.get(item.id);
@@ -237,7 +238,7 @@ export function packResourceFork(fork: ResourceFork): Result<Uint8Array, string>
   const resDataOffsets = new Map<string, number>();
 
   for (const res of orderedFlatList(fork)) {
-    const key = `${Buffer.from(res.type).toString('binary')}:${res.num}`;
+    const key = `${bytesToBinary(res.type)}:${res.num}`;
     resDataOffsets.set(key, tell());
     write(packer.pack('>i', res.data.length));
     write(res.data);
@@ -267,7 +268,7 @@ export function packResourceFork(fork: ResourceFork): Result<Uint8Array, string>
   const typeOffsets = new Map<string, number>();
   
   for (const [typeKey] of fork.tree) {
-    const resType = Buffer.from(typeKey, 'binary');
+    const resType = binaryToBytes(typeKey);
     const typeMap = fork.tree.get(typeKey);
     if (!typeMap || typeMap.size === 0) {
       return err(`Can't write resource types that contain 0 resources`);
@@ -316,7 +317,7 @@ export function packResourceFork(fork: ResourceFork): Result<Uint8Array, string>
   const resNamesOffset = tell();
   
   for (const res of orderedFlatList(fork)) {
-    const typeKey = Buffer.from(res.type).toString('binary');
+    const typeKey = bytesToBinary(res.type);
     const key = `${typeKey}:${res.num}`;
     const nameOffsetPos = nameOffsets.get(key);
     
@@ -385,12 +386,12 @@ export function getResourceType(fork: ResourceFork, key: string | Uint8Array): R
   
   if (typeof key === 'string') {
     const parsed = parseTypeName(key);
-    typeKey = Buffer.from(parsed).toString('binary');
+    typeKey = bytesToBinary(parsed);
   } else {
     if (key.length !== 4) {
       return err('restype isn\'t 4 bytes');
     }
-    typeKey = Buffer.from(key).toString('binary');
+    typeKey = bytesToBinary(key);
   }
   
   const typeMap = fork.tree.get(typeKey);
@@ -408,8 +409,8 @@ export function resourceForkToString(fork: ResourceFork): string {
   const typeCounts: Array<[string, number]> = [];
   
   for (const [typeKey, typeMap] of fork.tree) {
-    const resType = Buffer.from(typeKey, 'binary');
-    const sanitized = sanitizeTypeName(new Uint8Array(resType));
+    const resType = binaryToBytes(typeKey);
+    const sanitized = sanitizeTypeName(resType);
     typeCounts.push([sanitized, typeMap.size]);
   }
   

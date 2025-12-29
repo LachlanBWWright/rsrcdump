@@ -6,6 +6,7 @@ import { Resource, ResourceFork } from './resfork.js';
 import { StructTemplate, unpackRecord, pack } from './structtemplate.js';
 import { Result, ok, err } from './result.js';
 import { JsonOptions } from './jsonio.js';
+import { bytesToHex, hexToBytes, bytesToBinary, binaryToBytes, latin1Decode, latin1Encode } from './buffer-utils.js';
 
 export interface ResourceConverter {
   separateFile: string;
@@ -22,7 +23,7 @@ export class Base16Converter implements ResourceConverter {
   jsonKey = 'data';
 
   unpack(res: Resource, _fork: ResourceFork, _options?: JsonOptions): Result<string, string> {
-    return ok(Buffer.from(res.data).toString('hex').toUpperCase());
+    return ok(bytesToHex(res.data));
   }
 
   pack(obj: unknown): Result<Uint8Array, string> {
@@ -30,7 +31,7 @@ export class Base16Converter implements ResourceConverter {
       return err('Expected string for base16 data');
     }
     try {
-      return ok(new Uint8Array(Buffer.from(obj, 'hex')));
+      return ok(hexToBytes(obj));
     } catch (e) {
       return err(`Failed to decode hex: ${e}`);
     }
@@ -107,9 +108,9 @@ export class SingleStringConverter implements ResourceConverter {
     
     const length = lengthByte;
     const text = res.data.slice(1, 1 + length);
-    
+
     // Simplified encoding - use latin1 for macroman approximation
-    return ok(Buffer.from(text).toString('latin1'));
+    return ok(latin1Decode(text));
   }
 
   pack(obj: unknown): Result<Uint8Array, string> {
@@ -117,7 +118,7 @@ export class SingleStringConverter implements ResourceConverter {
       return err('Expected string');
     }
 
-    const encoded = Buffer.from(obj, 'latin1');
+    const encoded = latin1Encode(obj);
     const length = Math.min(encoded.length, 255);
     const result = new Uint8Array(1 + length);
     result[0] = length;
@@ -163,7 +164,7 @@ export class StringListConverter implements ResourceConverter {
       }
 
       const text = res.data.slice(offset, offset + length);
-      strings.push(Buffer.from(text).toString('latin1'));
+      strings.push(latin1Decode(text));
       offset += length;
     }
 
@@ -186,7 +187,7 @@ export class StringListConverter implements ResourceConverter {
         return err('Expected string in array');
       }
 
-      const encoded = Buffer.from(str, 'latin1');
+      const encoded = latin1Encode(str);
       const length = Math.min(encoded.length, 255);
       const strBuffer = new Uint8Array(1 + length);
       strBuffer[0] = length;
@@ -214,14 +215,14 @@ export class TextConverter implements ResourceConverter {
   jsonKey = 'obj';
 
   unpack(res: Resource, _fork: ResourceFork): Result<string, string> {
-    return ok(Buffer.from(res.data).toString('latin1'));
+    return ok(latin1Decode(res.data));
   }
 
   pack(obj: unknown): Result<Uint8Array, string> {
     if (typeof obj !== 'string') {
       return err('Expected string');
     }
-    return ok(new Uint8Array(Buffer.from(obj, 'latin1')));
+    return ok(latin1Encode(obj));
   }
 }
 
@@ -232,13 +233,13 @@ export function getStandardConverters(): Map<string, ResourceConverter> {
   const converters = new Map<string, ResourceConverter>();
 
   // Add standard text converters
-  const strKey = Buffer.from('STR ', 'binary').toString('binary');
+  const strKey = bytesToBinary(binaryToBytes('STR '));
   converters.set(strKey, new SingleStringConverter());
 
-  const strListKey = Buffer.from('STR#', 'binary').toString('binary');
+  const strListKey = bytesToBinary(binaryToBytes('STR#'));
   converters.set(strListKey, new StringListConverter());
 
-  const textKey = Buffer.from('TEXT', 'binary').toString('binary');
+  const textKey = bytesToBinary(binaryToBytes('TEXT'));
   converters.set(textKey, new TextConverter());
 
   return converters;

@@ -4,6 +4,7 @@
 
 import { Unpacker, Packer, calcsize } from './packutils.js';
 import { Result, ok, err } from './result.js';
+import { bytesToHex, hexToBytes } from './buffer-utils.js';
 
 export interface BacktickGroup {
   baseName: string;
@@ -205,7 +206,7 @@ export function unpackRecord(
 /**
  * Tags values with field names, supporting backtick macro arrays
  */
-function tagValues(template: StructTemplate, values: (number | Uint8Array)[], useBacktickArrays: boolean = true): unknown {
+function tagValues(template: StructTemplate, values: (number | Uint8Array | boolean)[], useBacktickArrays: boolean = true): unknown {
   // Check if we have any real user-provided field names (not just fallbacks)
   const hasRealFieldNames = template.fieldNames.length > 0 && 
     !template.fieldNames.every(name => !name || name.startsWith('.field'));
@@ -217,16 +218,16 @@ function tagValues(template: StructTemplate, values: (number | Uint8Array)[], us
       );
     }
 
-    const record: Record<string, number | Uint8Array | string | unknown[]> = {};
+    const record: Record<string, number | boolean | Uint8Array | string | unknown[]> = {};
     const usedIndices = new Set<number>();
-    
+
     // Handle backtick groups as arrays if enabled
     if (useBacktickArrays && template.backtickGroups.length > 0) {
       for (const group of template.backtickGroups) {
         const arrayItems: unknown[] = [];
-        
+
         for (let i = 0; i < group.count; i++) {
-          const itemData: Record<string, number | Uint8Array | string> = {};
+          const itemData: Record<string, number | boolean | Uint8Array | string> = {};
           
           for (let j = 0; j < group.fieldsPerItem; j++) {
             const valueIndex = group.startIndex + (i * group.fieldsPerItem) + j;
@@ -239,7 +240,7 @@ function tagValues(template: StructTemplate, values: (number | Uint8Array)[], us
               const baseName = underscorePos > 0 ? fieldName.slice(0, underscorePos) : fieldName;
               
               if (value instanceof Uint8Array) {
-                itemData[baseName] = Buffer.from(value).toString('hex').toUpperCase();
+                itemData[baseName] = bytesToHex(value);
               } else {
                 itemData[baseName] = value;
               }
@@ -270,7 +271,7 @@ function tagValues(template: StructTemplate, values: (number | Uint8Array)[], us
       if (name && value !== undefined) {
         // Convert byte strings to hex for JSON serialization
         if (value instanceof Uint8Array) {
-          record[name] = Buffer.from(value).toString('hex').toUpperCase();
+          record[name] = bytesToHex(value);
         } else {
           record[name] = value;
         }
@@ -281,7 +282,7 @@ function tagValues(template: StructTemplate, values: (number | Uint8Array)[], us
     return values[0];
   } else {
     // Return array for unnamed multi-field records
-    return values.map(v => v instanceof Uint8Array ? Buffer.from(v).toString('hex').toUpperCase() : v);
+    return values.map(v => v instanceof Uint8Array ? bytesToHex(v) : v);
   }
 }
 
@@ -325,7 +326,7 @@ function packRecord(template: StructTemplate, jsonObj: unknown): Result<Uint8Arr
     if (fieldFormat.endsWith('s')) {
       // Convert hex string back to bytes
       if (typeof fieldValue === 'string') {
-        return new Uint8Array(Buffer.from(fieldValue, 'hex'));
+        return hexToBytes(fieldValue);
       }
       return fieldValue as Uint8Array;
     } else {

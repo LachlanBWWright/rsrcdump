@@ -2,6 +2,8 @@
  * Text encoding and resource type name utilities
  */
 
+import { bytesToBinary, binaryToBytes, latin1Decode, latin1Encode, allocate, decode as bufDecode, encode as bufEncode } from './buffer-utils.js';
+
 let GLOBAL_ENCODING = 'macroman';
 
 export function getGlobalEncoding(): string {
@@ -30,7 +32,7 @@ export function sanitizeTypeName(restype: Uint8Array): string {
     trimmed = restype.slice(0, end);
   }
   
-  return encodeURIComponent(Buffer.from(trimmed).toString('binary'));
+  return encodeURIComponent(bytesToBinary(trimmed));
 }
 
 function isAllSpaces(bytes: Uint8Array): boolean {
@@ -47,24 +49,24 @@ function isAllSpaces(bytes: Uint8Array): boolean {
  */
 export function parseTypeName(saneName: string): Uint8Array {
   const decoded = decodeURIComponent(saneName);
-  const bytes = Buffer.from(decoded, 'binary');
-  
+  const bytes = binaryToBytes(decoded);
+
   // Pad to 4 bytes with spaces
-  const padded = Buffer.alloc(4, 0x20);
-  bytes.copy(padded, 0, 0, Math.min(bytes.length, 4));
-  
+  const padded = allocate(4, 0x20);
+  padded.set(bytes.slice(0, Math.min(bytes.length, 4)), 0);
+
   if (bytes.length > 4) {
     throw new Error(`decoded restype doesn't work out to 4 bytes`);
   }
-  
-  return new Uint8Array(padded);
+
+  return padded;
 }
 
 /**
  * Sanitizes a resource name for use in filenames
  */
 export function sanitizeResourceName(name: string | Uint8Array): string {
-  const str = typeof name === 'string' ? name : Buffer.from(name).toString();
+  const str = typeof name === 'string' ? name : latin1Decode(name);
   let sanitized = '';
   
   for (const c of str) {
@@ -83,9 +85,9 @@ export function decode(bytes: Uint8Array, _errors: 'replace' | 'ignore' = 'repla
   // For macroman, we use a simple approximation with latin1
   // A full macroman decoder would be more complex
   if (GLOBAL_ENCODING === 'macroman') {
-    return Buffer.from(bytes).toString('latin1');
+    return latin1Decode(bytes);
   }
-  return Buffer.from(bytes).toString(GLOBAL_ENCODING as BufferEncoding);
+  return bufDecode(bytes, GLOBAL_ENCODING);
 }
 
 /**
@@ -93,7 +95,7 @@ export function decode(bytes: Uint8Array, _errors: 'replace' | 'ignore' = 'repla
  */
 export function encode(text: string, _errors: 'replace' | 'ignore' = 'replace'): Uint8Array {
   if (GLOBAL_ENCODING === 'macroman') {
-    return new Uint8Array(Buffer.from(text, 'latin1'));
+    return latin1Encode(text);
   }
-  return new Uint8Array(Buffer.from(text, GLOBAL_ENCODING as BufferEncoding));
+  return bufEncode(text, GLOBAL_ENCODING);
 }
