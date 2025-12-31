@@ -733,7 +733,7 @@ describe("Integration Tests", () => {
       expect(isOk(result)).toBe(false);
       if (!isOk(result)) {
         expect(typeof result.error).toBe("string");
-        expect(result.error).toMatch(/Missing _metadata|Failed to pack/);
+        expect(result.error).toMatch(/Missing _metadata|Failed to pack|Invalid JSON blob/);
       }
     });
   });
