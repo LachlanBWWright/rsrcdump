@@ -4,6 +4,19 @@ import tseslint from "typescript-eslint";
 
 export default defineConfig(
   [
+    {
+      ignores: [
+        "node_modules/**",
+        "build/**",
+        "dist/**",
+        "coverage/**",
+        "**/*.d.ts",
+        "vitest.config.ts",
+        "examples/**",
+        "bin/**",
+        "scripts/**",
+      ],
+    },
     eslint.configs.recommended,
     tseslint.configs.strict,
     tseslint.configs.stylistic,
