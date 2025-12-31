@@ -9,3 +9,6 @@ python/output/*.txt
 .pytest_cache/
 *.egg-info/*.json
 test-*.mjs
+diagnostic_*.json
+diagnostic_*.txt
+typescript_test_output.json
