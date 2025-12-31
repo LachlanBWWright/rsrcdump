@@ -2,7 +2,7 @@
  * Binary packing and unpacking utilities
  */
 
-import { decode as bufDecode, encode as bufEncode, latin1Decode, latin1Encode } from './buffer-utils.js';
+import { decode as bufDecode, encode as bufEncode, latin1Decode, latin1Encode, asNumber, asPackUint8Array, asPackNumber, asPackNumberOrBigint } from './buffer-utils.js';
 
 /**
  * Unpacker for reading binary data sequentially
@@ -11,7 +11,7 @@ export class Unpacker {
   private data: Uint8Array;
   private offset: number;
 
-  constructor(data: Uint8Array, offset: number = 0) {
+  constructor(data: Uint8Array, offset = 0) {
     this.data = data;
     this.offset = offset;
   }
@@ -215,15 +215,15 @@ export class Unpacker {
 
   unpackRawPstr(): Uint8Array {
     const [length] = this.unpack(">B");
-    return this.read(length as number);
+    return this.read(asNumber(length));
   }
 
   unpackPstr(
-    encoding: string = "macroman",
+    encoding = "macroman",
     _errors: "replace" | "ignore" = "replace",
   ): string {
     const [length] = this.unpack(">B");
-    const bytes = this.read(length as number);
+    const bytes = this.read(asNumber(length));
     // Simplified encoding handling
     if (encoding === "macroman") {
       return latin1Decode(bytes);
@@ -292,23 +292,25 @@ export class Packer {
           bytes.push(0);
         }
       } else if (type === "s") {
-        const val = values[valueIdx++] as Uint8Array;
+        const val = asPackUint8Array(values[valueIdx++]);
         for (let j = 0; j < count; j++) {
-          bytes.push(j < val.length ? val[j]! : 0);
+          const byteVal = val[j];
+          bytes.push(j < val.length && byteVal !== undefined ? byteVal : 0);
         }
       } else if (type === "c") {
         // char (1 byte) - expects Uint8Array values
         for (let j = 0; j < count; j++) {
-          const val = values[valueIdx++] as Uint8Array;
-          bytes.push(val.length > 0 ? val[0]! : 0);
+          const val = asPackUint8Array(values[valueIdx++]);
+          const firstByte = val[0];
+          bytes.push(val.length > 0 && firstByte !== undefined ? firstByte : 0);
         }
       } else if (type === "B") {
         for (let j = 0; j < count; j++) {
-          bytes.push((values[valueIdx++] as number) & 0xff);
+          bytes.push(asPackNumber(values[valueIdx++]) & 0xff);
         }
       } else if (type === "b") {
         for (let j = 0; j < count; j++) {
-          const val = values[valueIdx++] as number;
+          const val = asPackNumber(values[valueIdx++]);
           bytes.push(val < 0 ? val + 256 : val);
         }
       } else if (type === "?") {
@@ -319,7 +321,7 @@ export class Packer {
       } else if (type === "e") {
         // Half-precision float (2 bytes) - convert from full float
         for (let j = 0; j < count; j++) {
-          const val = values[valueIdx++] as number;
+          const val = asPackNumber(values[valueIdx++]);
           // Convert float32 to float16
           const buffer = new ArrayBuffer(4);
           const view = new DataView(buffer);
@@ -351,7 +353,7 @@ export class Packer {
         }
       } else if (type === "H") {
         for (let j = 0; j < count; j++) {
-          const val = values[valueIdx++] as number;
+          const val = asPackNumber(values[valueIdx++]);
           if (littleEndian) {
             bytes.push(val & 0xff, (val >> 8) & 0xff);
           } else {
@@ -360,7 +362,7 @@ export class Packer {
         }
       } else if (type === "h") {
         for (let j = 0; j < count; j++) {
-          let val = values[valueIdx++] as number;
+          let val = asPackNumber(values[valueIdx++]);
           if (val < 0) val = val + 65536;
           if (littleEndian) {
             bytes.push(val & 0xff, (val >> 8) & 0xff);
@@ -370,7 +372,7 @@ export class Packer {
         }
       } else if (type === "L" || type === "I") {
         for (let j = 0; j < count; j++) {
-          const val = values[valueIdx++] as number;
+          const val = asPackNumber(values[valueIdx++]);
           if (littleEndian) {
             bytes.push(
               val & 0xff,
@@ -389,7 +391,7 @@ export class Packer {
         }
       } else if (type === "l" || type === "i") {
         for (let j = 0; j < count; j++) {
-          let val = values[valueIdx++] as number;
+          let val = asPackNumber(values[valueIdx++]);
           if (val < 0) val = val + 4294967296;
           if (littleEndian) {
             bytes.push(
@@ -410,7 +412,7 @@ export class Packer {
       } else if (type === "n") {
         // ssize_t - treat as signed 64-bit on 64-bit platforms
         for (let j = 0; j < count; j++) {
-          const val = values[valueIdx++] as bigint | number;
+          const val = asPackNumberOrBigint(values[valueIdx++]);
           const bigVal = typeof val === 'bigint' ? val : BigInt(val);
           const buffer = new ArrayBuffer(8);
           const view = new DataView(buffer);
@@ -422,7 +424,7 @@ export class Packer {
       } else if (type === "N" || type === "P") {
         // size_t and void * - treat as unsigned 64-bit on 64-bit platforms
         for (let j = 0; j < count; j++) {
-          const val = values[valueIdx++] as bigint | number;
+          const val = asPackNumberOrBigint(values[valueIdx++]);
           const bigVal = typeof val === 'bigint' ? val : BigInt(val);
           const buffer = new ArrayBuffer(8);
           const view = new DataView(buffer);
@@ -433,7 +435,7 @@ export class Packer {
         }
       } else if (type === "f") {
         for (let j = 0; j < count; j++) {
-          const val = values[valueIdx++] as number;
+          const val = asPackNumber(values[valueIdx++]);
           const buffer = new ArrayBuffer(4);
           const view = new DataView(buffer);
           view.setFloat32(0, val, littleEndian);
@@ -446,7 +448,7 @@ export class Packer {
         }
       } else if (type === "d") {
         for (let j = 0; j < count; j++) {
-          const val = values[valueIdx++] as number;
+          const val = asPackNumber(values[valueIdx++]);
           const buffer = new ArrayBuffer(8);
           const view = new DataView(buffer);
           view.setFloat64(0, val, littleEndian);
@@ -472,7 +474,7 @@ export class Packer {
  */
 export class WritePlaceholder {
   private _size: number;
-  private committed: boolean = false;
+  private committed = false;
 
   constructor(stream: { buffer: Uint8Array[]; position: number }, fmt: string) {
     // Calculate size from format
@@ -554,7 +556,7 @@ export class WritePlaceholder {
 export function packPstr(
   text: string,
   padding: number,
-  encoding: string = "macroman",
+  encoding = "macroman",
 ): Uint8Array {
   const encoded = encoding === "macroman" ? latin1Encode(text) : bufEncode(text, encoding);
   const length = Math.min(encoded.length, 255);

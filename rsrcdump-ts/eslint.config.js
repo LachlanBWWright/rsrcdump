@@ -15,6 +15,7 @@ export default defineConfig(
         "examples/**",
         "bin/**",
         "scripts/**",
+        "eslint.config.js",
       ],
     },
     eslint.configs.recommended,
@@ -32,6 +33,13 @@ export default defineConfig(
     },
     rules: {
       "@typescript-eslint/no-unsafe-type-assertion": "error",
+      "@typescript-eslint/no-unused-vars": [
+        "error",
+        {
+          argsIgnorePattern: "^_",
+          varsIgnorePattern: "^_",
+        },
+      ],
     },
   },
 );

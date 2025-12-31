@@ -115,19 +115,19 @@ describe("Integration Tests", () => {
           JSON.stringify(jsonBlob, null, 2),
           "utf-8",
         );
-        // eslint-disable-next-line no-console
+         
         console.log(
           "Saved TypeScript JSON output to ../typescript_test_output.json",
         );
       } catch (err) {
-        // eslint-disable-next-line no-console
+         
         console.warn("Failed to save TypeScript JSON output:", err);
       }
 
       // Step 4: Convert back to binary
       const bytesResult = await loadBytesFromJsonAsync(jsonBlob, structSpecs);
       if (!isOk(bytesResult)) {
-        // eslint-disable-next-line no-console
+         
         console.error("loadBytesFromJsonAsync failed:", bytesResult.error);
         try {
           await writeFile(
@@ -135,10 +135,10 @@ describe("Integration Tests", () => {
             JSON.stringify(jsonBlob, null, 2),
             "utf-8",
           );
-          // eslint-disable-next-line no-console
+           
           console.error("Wrote diagnostic JSON to ../diagnostic_ts_json.json");
         } catch (e) {
-          // eslint-disable-next-line no-console
+           
           console.error("Failed to write diagnostic JSON:", e);
         }
       }
@@ -193,7 +193,7 @@ describe("Integration Tests", () => {
         }
 
         const message = lines.join("\n");
-        // eslint-disable-next-line no-console
+         
         console.error(message);
 
         // Write structured diagnostic file for offline inspection
@@ -223,10 +223,10 @@ describe("Integration Tests", () => {
             JSON.stringify({ originalCounts, regenCounts, missing }, null, 2),
             "utf-8",
           );
-          // eslint-disable-next-line no-console
+           
           console.error("Wrote diagnostic_regen_diff.json");
         } catch (e) {
-          // eslint-disable-next-line no-console
+           
           console.error("Failed to write regen diagnostic:", e);
         }
 
@@ -243,7 +243,7 @@ describe("Integration Tests", () => {
         const origCount = originalFork.tree.get(typeKey)?.size || 0;
         const regenCount = regenFork.tree.get(typeKey)?.size || 0;
         // Print each type check so failing type is visible in logs
-        // eslint-disable-next-line no-console
+         
         console.error(
           `Checking ${typeName}: original=${origCount} regen=${regenCount}`,
         );
@@ -336,7 +336,7 @@ describe("Integration Tests", () => {
           false,
         );
         if (!isOk(regenBytesRes)) {
-          // eslint-disable-next-line no-console
+           
           console.error("loadBytesFromJson failed:", regenBytesRes.error);
           try {
             await writeFile(
@@ -344,12 +344,12 @@ describe("Integration Tests", () => {
               JSON.stringify(jsonBlob, null, 2),
               "utf-8",
             );
-            // eslint-disable-next-line no-console
+             
             console.error(
               "Wrote diagnostic JSON to ../diagnostic_ts_json.json",
             );
           } catch (e) {
-            // eslint-disable-next-line no-console
+             
             console.error("Failed to write diagnostic JSON:", e);
           }
         }
@@ -445,7 +445,7 @@ describe("Integration Tests", () => {
             } else {
               // Types without a spec may have conversion_error (fallbacks, etc.) — do not fail here
               if (wrapper.conversion_error !== undefined) {
-                // eslint-disable-next-line no-console
+                 
                 console.error(
                   `Found conversion_error for non-specified ${typeName}#${resIdStr}:`,
                   wrapper.conversion_error,
@@ -457,7 +457,7 @@ describe("Integration Tests", () => {
 
         // Convert back
         const bytesResult = await loadBytesFromJsonAsync(jsonBlob, structSpecs);
-        // eslint-disable-next-line no-console
+         
         console.error(
           "bytesResult.ok:",
           bytesResult.ok,
@@ -465,7 +465,7 @@ describe("Integration Tests", () => {
           isOk(bytesResult) ? "none" : bytesResult.error,
         );
         if (!isOk(bytesResult)) {
-          // eslint-disable-next-line no-console
+           
           console.error(
             "loadBytesFromJsonAsync failed (struct specs test):",
             bytesResult.error,
@@ -476,12 +476,12 @@ describe("Integration Tests", () => {
               JSON.stringify(jsonBlob, null, 2),
               "utf-8",
             );
-            // eslint-disable-next-line no-console
+             
             console.error(
               "Wrote diagnostic JSON to ../diagnostic_ts_json.json",
             );
           } catch (e) {
-            // eslint-disable-next-line no-console
+             
             console.error("Failed to write diagnostic JSON:", e);
           }
           throw new Error(
@@ -564,7 +564,7 @@ describe("Integration Tests", () => {
         }
       } catch (err: any) {
         // Ensure the error is visible in logs and write diagnostics
-        // eslint-disable-next-line no-console
+         
         console.error("Test error:", err && err.message ? err.message : err);
         try {
           await writeFile(
@@ -572,10 +572,10 @@ describe("Integration Tests", () => {
             err && err.stack ? err.stack : String(err),
             "utf-8",
           );
-          // eslint-disable-next-line no-console
+           
           console.error("Wrote diagnostic_failure_stack.txt");
         } catch (e) {
-          // eslint-disable-next-line no-console
+           
           console.error("Failed to write diagnostic failure stack:", e);
         }
         throw err;
@@ -635,7 +635,7 @@ describe("Integration Tests", () => {
       const fork = result.value;
 
       // Collect all resources with orders
-      const resources: Array<{ type: string; id: number; order: number }> = [];
+      const resources: { type: string; id: number; order: number }[] = [];
 
       for (const [typeKey, typeMap] of fork.tree) {
         const typeStr = Buffer.from(typeKey, "binary").toString("latin1");

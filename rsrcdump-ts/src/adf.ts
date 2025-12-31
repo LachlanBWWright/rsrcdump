@@ -4,6 +4,7 @@
 
 import { Unpacker, Packer } from './packutils.js';
 import { Result, ok, err } from './result.js';
+import { asNumber, asUint8Array } from './buffer-utils.js';
 
 export const ADF_MAGIC = 0x00051607;
 export const ADF_VERSION = 0x00020000;
@@ -17,10 +18,10 @@ export function unpackAdf(adfData: Uint8Array): Result<Map<number, Uint8Array>, 
     const u = new Unpacker(adfData);
 
     const header = u.unpack('>LL16sH');
-    const magic = header[0] as number;
-    const version = header[1] as number;
-    const filler = header[2] as Uint8Array;
-    const numEntries = header[3] as number;
+    const magic = asNumber(header[0]);
+    const version = asNumber(header[1]);
+    const filler = asUint8Array(header[2]);
+    const numEntries = asNumber(header[3]);
 
   if (magic !== ADF_MAGIC) {
     return err('AppleDouble magic number not found');
@@ -30,11 +31,11 @@ export function unpackAdf(adfData: Uint8Array): Result<Map<number, Uint8Array>, 
     return err(`Only Version 2 ADF is supported (this is version ${version.toString(16).padStart(8, '0')})`);
   }
 
-  const entryOffsets: Array<[number, number, number]> = [];
+  const entryOffsets: [number, number, number][] = [];
 
   for (let i = 0; i < numEntries; i++) {
     const entry = u.unpack('>LLL');
-    entryOffsets.push([entry[0] as number, entry[1] as number, entry[2] as number]);
+    entryOffsets.push([asNumber(entry[0]), asNumber(entry[1]), asNumber(entry[2])]);
   }
 
     const entries = new Map<number, Uint8Array>();

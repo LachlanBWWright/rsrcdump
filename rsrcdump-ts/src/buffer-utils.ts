@@ -4,6 +4,66 @@
  */
 
 /**
+ * Type guard: asserts value is a number from unpack result
+ */
+export function asNumber(value: number | Uint8Array | boolean | undefined): number {
+  if (typeof value === 'number') {
+    return value;
+  }
+  throw new Error(`Expected number but got ${typeof value}`);
+}
+
+/**
+ * Type guard: asserts value is a Uint8Array from unpack result
+ */
+export function asUint8Array(value: number | Uint8Array | boolean | undefined): Uint8Array {
+  if (value instanceof Uint8Array) {
+    return value;
+  }
+  throw new Error(`Expected Uint8Array but got ${typeof value}`);
+}
+
+/**
+ * Type guard: asserts value is a boolean from unpack result  
+ */
+export function asBoolean(value: number | Uint8Array | boolean | undefined): boolean {
+  if (typeof value === 'boolean') {
+    return value;
+  }
+  throw new Error(`Expected boolean but got ${typeof value}`);
+}
+
+/**
+ * Type guard for pack values: asserts value is a Uint8Array
+ */
+export function asPackUint8Array(value: number | Uint8Array | bigint | undefined): Uint8Array {
+  if (value instanceof Uint8Array) {
+    return value;
+  }
+  throw new Error(`Expected Uint8Array but got ${typeof value}`);
+}
+
+/**
+ * Type guard for pack values: asserts value is a number
+ */
+export function asPackNumber(value: number | Uint8Array | bigint | undefined): number {
+  if (typeof value === 'number') {
+    return value;
+  }
+  throw new Error(`Expected number but got ${typeof value}`);
+}
+
+/**
+ * Type guard for pack values: asserts value is a number or bigint, returns as number or bigint
+ */
+export function asPackNumberOrBigint(value: number | Uint8Array | bigint | undefined): number | bigint {
+  if (typeof value === 'number' || typeof value === 'bigint') {
+    return value;
+  }
+  throw new Error(`Expected number or bigint but got ${typeof value}`);
+}
+
+/**
  * Convert bytes to hex string
  */
 export function bytesToHex(data: Uint8Array | ArrayBuffer): string {

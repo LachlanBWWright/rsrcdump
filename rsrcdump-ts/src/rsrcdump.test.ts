@@ -152,7 +152,7 @@ describe("rsrcdump-ts", () => {
       // Convert back to binary
       const bytesResult = loadBytesFromJson(jsonBlob, structSpecs);
       if (!isOk(bytesResult)) {
-        // eslint-disable-next-line no-console
+         
         console.error("loadBytesFromJson failed:", bytesResult.error);
         try {
           await writeFile(
@@ -160,10 +160,10 @@ describe("rsrcdump-ts", () => {
             JSON.stringify(jsonBlob, null, 2),
             "utf-8",
           );
-          // eslint-disable-next-line no-console
+           
           console.error("Wrote diagnostic JSON to ../diagnostic_ts_json.json");
         } catch (e) {
-          // eslint-disable-next-line no-console
+           
           console.error("Failed to write diagnostic JSON:", e);
         }
       }

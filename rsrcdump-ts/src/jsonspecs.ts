@@ -37,8 +37,8 @@ export interface StructSpecJson {
  */
 function jsonTypeToFormatChar(
   type: string,
-  signed: boolean = false,
-  count: number = 1
+  signed = false,
+  count = 1
 ): Result<string, string> {
   const typeMap: Record<string, { signed: string; unsigned: string }> = {
     byte: { signed: 'b', unsigned: 'B' },

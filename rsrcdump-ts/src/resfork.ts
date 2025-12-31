@@ -5,7 +5,7 @@
 import { Unpacker, Packer, calcsize } from './packutils.js';
 import { decode, sanitizeTypeName, parseTypeName } from './textio.js';
 import { Result, ok, err } from './result.js';
-import { bytesToBinary, binaryToBytes } from './buffer-utils.js';
+import { bytesToBinary, binaryToBytes, asNumber, asUint8Array } from './buffer-utils.js';
 
 export type ResType = Uint8Array;
 
@@ -31,9 +31,9 @@ export function createResource(
   num: number,
   data: Uint8Array,
   name: Uint8Array = new Uint8Array(0),
-  flags: number = 0,
-  junk: number = 0,
-  order: number = 0xFFFFFFFF
+  flags = 0,
+  junk = 0,
+  order = 0xFFFFFFFF
 ): Resource {
   return { type, num, data, name, flags, junk, order };
 }
@@ -76,10 +76,10 @@ export function resourceForkFromBytes(data: Uint8Array): Result<ResourceFork, st
 
   const u = new Unpacker(data);
   const header = u.unpack('>LLLL16x');
-  const dataOffset = header[0] as number;
-  const mapOffset = header[1] as number;
-  const dataLength = header[2] as number;
-  const mapLength = header[3] as number;
+  const dataOffset = asNumber(header[0]);
+  const mapOffset = asNumber(header[1]);
+  const dataLength = asNumber(header[2]);
+  const mapLength = asNumber(header[3]);
 
   if (dataOffset + dataLength > data.length || mapOffset + mapLength > data.length) {
     return err('offsets/lengths in header are nonsense');
@@ -90,26 +90,26 @@ export function resourceForkFromBytes(data: Uint8Array): Result<ResourceFork, st
 
   uMap.skip(16); // skip copy of resource header
   const mapHeader = uMap.unpack('>LHH');
-  fork.junkNextresmap = mapHeader[0] as number;
-  fork.junkFilerefnum = mapHeader[1] as number;
-  fork.fileAttributes = mapHeader[2] as number;
+  fork.junkNextresmap = asNumber(mapHeader[0]);
+  fork.junkFilerefnum = asNumber(mapHeader[1]);
+  fork.fileAttributes = asNumber(mapHeader[2]);
 
   const typeInfo = uMap.unpack('>HHH');
-  const typelistOffsetInMap = typeInfo[0] as number;
-  const namelistOffsetInMap = typeInfo[1] as number;
-  const numTypes = (typeInfo[2] as number) + 1;
+  const typelistOffsetInMap = asNumber(typeInfo[0]);
+  const namelistOffsetInMap = asNumber(typeInfo[1]);
+  const numTypes = asNumber(typeInfo[2]) + 1;
 
   const mapData = data.slice(mapOffset, mapOffset + mapLength);
   const uTypes = new Unpacker(mapData.slice(typelistOffsetInMap));
   const uNames = new Unpacker(mapData.slice(namelistOffsetInMap));
 
-  const order: Array<{ type: ResType; id: number; offset: number }> = [];
+  const order: { type: ResType; id: number; offset: number }[] = [];
 
   for (let i = 0; i < numTypes; i++) {
     const typeRec = uMap.unpack('>4sHH');
-    const resType = typeRec[0] as Uint8Array;
-    const resCount = (typeRec[1] as number) + 1;
-    const reslistOffset = typeRec[2] as number;
+    const resType = asUint8Array(typeRec[0]);
+    const resCount = asNumber(typeRec[1]) + 1;
+    const reslistOffset = asNumber(typeRec[2]);
 
     const typeKey = bytesToBinary(resType);
 
@@ -123,10 +123,10 @@ export function resourceForkFromBytes(data: Uint8Array): Result<ResourceFork, st
     
     for (let j = 0; j < resCount; j++) {
       const resRec = uTypes.unpack('>hHLL');
-      const resId = resRec[0] as number;
-      const resNameOffset = resRec[1] as number;
-      const resPackedAttr = resRec[2] as number;
-      const resJunk = resRec[3] as number;
+      const resId = asNumber(resRec[0]);
+      const resNameOffset = asNumber(resRec[1]);
+      const resPackedAttr = asNumber(resRec[2]);
+      const resJunk = asNumber(resRec[3]);
 
       // unpack attributes
       const resFlags = (resPackedAttr & 0xFF000000) >>> 24;
@@ -143,14 +143,14 @@ export function resourceForkFromBytes(data: Uint8Array): Result<ResourceFork, st
       let resName = new Uint8Array(0);
       if (resNameOffset !== 0xFFFF) {
         uNames.seek(resNameOffset);
-        const nameLength = uNames.unpack('>B')[0] as number;
+        const nameLength = asNumber(uNames.unpack('>B')[0]);
         const resNameRaw = uNames.read(nameLength);
         resName = new Uint8Array(resNameRaw);
       }
 
       // fetch resource data from data section
       uData.seek(resDataOffset);
-      const resSize = uData.unpack('>i')[0] as number;
+      const resSize = asNumber(uData.unpack('>i')[0]);
       const resDataRaw = uData.read(resSize);
       const resData = new Uint8Array(resDataRaw);
 
@@ -406,7 +406,7 @@ export function getResourceType(fork: ResourceFork, key: string | Uint8Array): R
  * Gets a string representation of the resource fork
  */
 export function resourceForkToString(fork: ResourceFork): string {
-  const typeCounts: Array<[string, number]> = [];
+  const typeCounts: [string, number][] = [];
   
   for (const [typeKey, typeMap] of fork.tree) {
     const resType = binaryToBytes(typeKey);

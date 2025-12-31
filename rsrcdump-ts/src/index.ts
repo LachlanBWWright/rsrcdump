@@ -150,7 +150,7 @@ export async function loadBytesFromJsonAsync(
   structSpecs: string[] = [],
   onlyTypes: string[] = [],
   skipTypes: string[] = [],
-  adf: boolean = true,
+  adf = true,
 ): Promise<Result<Uint8Array, string>> {
   const converters = await getConverters(structSpecs);
 
@@ -194,7 +194,7 @@ export function loadBytesFromJson(
   structSpecs: string[] = [],
   onlyTypes: string[] = [],
   skipTypes: string[] = [],
-  adf: boolean = true,
+  adf = true,
 ): Result<Uint8Array, string> {
   const converters = getConvertersSync(structSpecs);
 
@@ -270,7 +270,7 @@ function getConvertersSync(structSpecs: string[]): Map<string, any> {
       const templateResult = structTemplateFromString(formatStr);
       if (!templateResult.ok) {
         // Skip invalid templates
-        // eslint-disable-next-line no-console
+         
         console.warn(
           `Skipping invalid struct spec: ${templateArg} -> ${templateResult.error}`,
         );
@@ -281,7 +281,7 @@ function getConvertersSync(structSpecs: string[]): Map<string, any> {
       converters.set(typeKey, new StructConverter(templateResult.value));
     } catch (e) {
       // Ignore errors during parsing of struct specs
-      // eslint-disable-next-line no-console
+       
       console.warn(`Failed to parse struct spec '${templateArg}': ${e}`);
       continue;
     }

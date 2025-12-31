@@ -36,8 +36,8 @@ export function sanitizeTypeName(restype: Uint8Array): string {
 }
 
 function isAllSpaces(bytes: Uint8Array): boolean {
-  for (let i = 0; i < bytes.length; i++) {
-    if (bytes[i] !== 0x20) {
+  for (const byte of bytes) {
+    if (byte !== 0x20) {
       return false;
     }
   }
