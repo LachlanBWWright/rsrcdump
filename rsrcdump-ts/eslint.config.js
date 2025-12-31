@@ -1,88 +1,24 @@
-/**
- * Flat ESLint config (eslint.config.cjs)
- * Based on https://eslint.org/docs/latest/use/configure/configuration-files
- */
+import eslint from "@eslint/js";
+import { defineConfig } from "eslint/config";
+import tseslint from "typescript-eslint";
 
-const { defineConfig } = require("eslint-define-config");
-
-module.exports = defineConfig([
-  // files to ignore
+export default defineConfig(
+  [
+    eslint.configs.recommended,
+    tseslint.configs.strict,
+    tseslint.configs.stylistic,
+  ],
   {
-    ignores: ["build/**", "dist/**", "node_modules/**", "*.d.ts"],
-  },
-
-  // Base rules for JS and general project
-  {
-    files: ["**/*.js", "**/*.cjs", "**/*.mjs", "**/*.ts", "**/*.tsx"],
-    languageOptions: {
-      ecmaVersion: "latest",
-      sourceType: "module",
-    },
     plugins: {
-      vitest: require("eslint-plugin-vitest"),
-      import: require("eslint-plugin-import"),
+      "typescript-eslint": tseslint,
     },
-    rules: {
-      "no-console": "warn",
-      "import/order": [
-        "error",
-        {
-          groups: ["builtin", "external", "internal", "parent", "sibling", "index", "object"],
-          "newlines-between": "always",
-          alphabetize: { order: "asc", caseInsensitive: true }
-        }
-      ]
-    },
-    settings: {
-      "import/parsers": {
-        "@typescript-eslint/parser": [".ts", ".tsx"]
-      },
-      "import/resolver": {
-        typescript: {
-          alwaysTryTypes: true
-        }
-      }
-    }
-  },
-
-  // TypeScript files (type-aware rules need parserOptions.project)
-  {
-    files: ["**/*.ts", "**/*.tsx"],
     languageOptions: {
-      parser: require("@typescript-eslint/parser"),
       parserOptions: {
-        project: ["./tsconfig.json"],
-        tsconfigRootDir: __dirname,
-        warnOnUnsupportedTypeScriptVersion: false,
-        ecmaVersion: "latest",
-        sourceType: "module",
+        projectService: true,
       },
     },
-    plugins: {
-      "@typescript-eslint": require("@typescript-eslint/eslint-plugin"),
-    },
-    extends: [
-      "plugin:@typescript-eslint/recommended",
-      "plugin:@typescript-eslint/recommended-requiring-type-checking",
-    ],
     rules: {
-      "@typescript-eslint/no-unused-vars": ["error", { varsIgnorePattern: "^_", argsIgnorePattern: "^_" }],
-      "@typescript-eslint/no-explicit-any": "off",
-      "@typescript-eslint/consistent-type-imports": ["error", { prefer: "type-imports" }]
-    }
+      "@typescript-eslint/no-unsafe-type-assertion": "error",
+    },
   },
-
-  // Test files (Vitest)
-  {
-    files: ["**/*.test.ts", "tests/**", "src/**/__tests__/**"],
-    env: { vitest: true }
-  },
-
-  // Don't apply type-aware parsing to JS config files
-  {
-    files: ["*.cjs", "*.js"],
-    languageOptions: {
-      parserOptions: { project: null }
-    }
-  }
-]);
+);

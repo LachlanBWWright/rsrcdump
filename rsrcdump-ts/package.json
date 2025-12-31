@@ -41,8 +41,8 @@
     "test:watch": "vitest",
     "test:ui": "vitest --ui",
     "test:coverage": "vitest run --coverage",
-    "lint": "eslint --ext .ts .",
-    "lint:fix": "eslint --ext .ts . --fix",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
     "cli": "tsx src/cli.ts",
     "pack:test": "./scripts/pack-test.sh",
     "example:basic": "tsx examples/basic-usage.ts",
@@ -81,7 +81,7 @@
     "@types/node": "^25.0.2",
     "@typescript-eslint/eslint-plugin": "^6.6.0",
     "@typescript-eslint/parser": "^6.6.0",
-    "eslint": "^8.51.0",
+    "eslint": "^9.39.2",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-vitest": "^0.3.0",
     "tsx": "^4.21.0",
@@ -90,5 +90,8 @@
   },
   "engines": {
     "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "typescript-eslint": "^8.51.0"
   }
 }
