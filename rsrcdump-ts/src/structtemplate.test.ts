@@ -6,6 +6,7 @@ import { describe, it, expect } from 'vitest';
 import { structTemplateFromString, unpackRecord, pack } from './structtemplate.js';
 import { isOk } from './result.js';
 import { Packer } from './packutils.js';
+import { isRecord, isArray, isNumber } from './buffer-utils.js';
 
 describe('StructTemplate', () => {
   describe('Format Parsing', () => {
@@ -86,9 +87,12 @@ describe('StructTemplate', () => {
       expect(isOk(unpackResult)).toBe(true);
       
       if (isOk(unpackResult)) {
-        const record = unpackResult.value as Record<string, number>;
-        expect(record.x).toBe(409);
-        expect(record.z).toBe(2057);
+        const record = unpackResult.value;
+        expect(isRecord(record)).toBe(true);
+        if (isRecord(record)) {
+          expect(record.x).toBe(409);
+          expect(record.z).toBe(2057);
+        }
       }
     });
 
@@ -106,8 +110,11 @@ describe('StructTemplate', () => {
       expect(isOk(unpackResult)).toBe(true);
       
       if (isOk(unpackResult)) {
-        const value = unpackResult.value as number;
-        expect(value).toBeCloseTo(3.14, 2);
+        const value = unpackResult.value;
+        expect(isNumber(value)).toBe(true);
+        if (isNumber(value)) {
+          expect(value).toBeCloseTo(3.14, 2);
+        }
       }
     });
 
@@ -125,10 +132,12 @@ describe('StructTemplate', () => {
       expect(isOk(unpackResult)).toBe(true);
       
       if (isOk(unpackResult)) {
-        const arr = unpackResult.value as number[];
-        expect(Array.isArray(arr)).toBe(true);
-        expect(arr[0]).toBe(409);
-        expect(arr[1]).toBe(2057);
+        const arr = unpackResult.value;
+        expect(isArray(arr)).toBe(true);
+        if (isArray(arr)) {
+          expect(arr[0]).toBe(409);
+          expect(arr[1]).toBe(2057);
+        }
       }
     });
   });

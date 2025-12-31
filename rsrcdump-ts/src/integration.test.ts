@@ -15,6 +15,7 @@ import {
   resourceForkToString,
   getStandardConverters,
 } from "./index.js";
+import { isRecord } from "./buffer-utils.js";
 
 let structSpecs: string[] = [];
 
@@ -255,18 +256,22 @@ describe("Integration Tests", () => {
       const alisKey = Buffer.from("alis", "binary").toString("binary");
 
       if (originalFork.tree.has(hedKey) && regenFork.tree.has(hedKey)) {
-        const origHed = originalFork.tree.get(hedKey)!;
-        const regenHed = regenFork.tree.get(hedKey)!;
+        const origHed = originalFork.tree.get(hedKey);
+        const regenHed = regenFork.tree.get(hedKey);
 
-        // Expect same resource IDs for Hedr
-        expect(Array.from(regenHed.keys())).toEqual(Array.from(origHed.keys()));
+        if (origHed && regenHed) {
+          // Expect same resource IDs for Hedr
+          expect(Array.from(regenHed.keys())).toEqual(Array.from(origHed.keys()));
 
-        // Compare a canonical resource if present
-        if (origHed.has(1000) && regenHed.has(1000)) {
-          const orig = origHed.get(1000)!;
-          const regen = regenHed.get(1000)!;
-          expect(Buffer.from(regen.data)).toEqual(Buffer.from(orig.data));
-          expect(regen.order).toBe(orig.order);
+          // Compare a canonical resource if present
+          if (origHed.has(1000) && regenHed.has(1000)) {
+            const orig = origHed.get(1000);
+            const regen = regenHed.get(1000);
+            if (orig && regen) {
+              expect(Buffer.from(regen.data)).toEqual(Buffer.from(orig.data));
+              expect(regen.order).toBe(orig.order);
+            }
+          }
         }
       }
 
@@ -394,7 +399,7 @@ describe("Integration Tests", () => {
               JSON.stringify(jsonResult, null, 2),
               "utf-8",
             );
-          } catch (e) {
+          } catch {
             // ignore
           }
           throw new Error(`saveToJson failed: ${jsonResult.error}`);
@@ -433,12 +438,10 @@ describe("Integration Tests", () => {
 
         for (const [typeName, typeRecords] of Object.entries(jsonBlob)) {
           if (typeName.startsWith("_") || typeName.length > 4) continue;
-          if (typeof typeRecords !== "object" || typeRecords === null) continue;
-          for (const [resIdStr, resBlob] of Object.entries(
-            typeRecords as Record<string, unknown>,
-          )) {
-            if (typeof resBlob !== "object" || resBlob === null) continue;
-            const wrapper = resBlob as { conversion_error?: unknown };
+          if (!isRecord(typeRecords)) continue;
+          for (const [resIdStr, resBlob] of Object.entries(typeRecords)) {
+            if (!isRecord(resBlob)) continue;
+            const wrapper = resBlob;
             if (specTypes.has(typeName)) {
               // This type had a struct spec provided — it must NOT have a conversion_error
               expect(wrapper.conversion_error).toBeUndefined();
@@ -511,7 +514,11 @@ describe("Integration Tests", () => {
               console.error(`Missing resource ${typeName}#${resId} in regen`);
               continue;
             }
-            const regenRes = regenMap.get(resId)!;
+            const regenRes = regenMap.get(resId);
+            if (!regenRes) {
+              console.error(`Missing resource ${typeName}#${resId} in regen (undefined)`);
+              continue;
+            }
             if (regenRes.data.length !== res.data.length) {
               console.error(
                 `Resource ${typeName}#${resId} length mismatch: orig ${res.data.length} regen ${regenRes.data.length}`,
@@ -555,21 +562,23 @@ describe("Integration Tests", () => {
                     "Wrote diagnostic binary pair for",
                     `${typeName}#${resId}`,
                   );
-                } catch (e) {
-                  console.error("Failed to write binary diagnostics:", e);
+                } catch (_e) {
+                  console.error("Failed to write binary diagnostics:", _e);
                 }
               }
             }
           }
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         // Ensure the error is visible in logs and write diagnostics
+        const errMessage = err instanceof Error ? err.message : String(err);
+        const errStack = err instanceof Error ? err.stack : String(err);
          
-        console.error("Test error:", err && err.message ? err.message : err);
+        console.error("Test error:", errMessage);
         try {
           await writeFile(
             "../diagnostic_failure_stack.txt",
-            err && err.stack ? err.stack : String(err),
+            errStack ?? String(err),
             "utf-8",
           );
            

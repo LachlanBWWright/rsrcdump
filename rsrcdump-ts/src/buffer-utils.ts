@@ -64,6 +64,34 @@ export function asPackNumberOrBigint(value: number | Uint8Array | bigint | undef
 }
 
 /**
+ * Type guard: checks if value is a record (plain object)
+ */
+export function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Type guard: checks if value is an array
+ */
+export function isArray(value: unknown): value is unknown[] {
+  return Array.isArray(value);
+}
+
+/**
+ * Type guard: checks if value is a number
+ */
+export function isNumber(value: unknown): value is number {
+  return typeof value === 'number';
+}
+
+/**
+ * Type guard: checks if value is a boolean
+ */
+export function isBoolean(value: unknown): value is boolean {
+  return typeof value === 'boolean';
+}
+
+/**
  * Convert bytes to hex string
  */
 export function bytesToHex(data: Uint8Array | ArrayBuffer): string {

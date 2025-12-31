@@ -5,6 +5,7 @@
 import { describe, it, expect } from 'vitest';
 import { structTemplateFromString, unpackRecord } from './structtemplate';
 import { isOk } from './result';
+import { isRecord, isArray } from './buffer-utils';
 
 describe('backtick arrays', () => {
   it('detects backtick groups in struct templates', () => {
@@ -38,10 +39,15 @@ describe('backtick arrays', () => {
     expect(isOk(unpackResult)).toBe(true);
     if (!isOk(unpackResult)) return;
     
-    const obj = unpackResult.value as Record<string, unknown>;
+    const obj = unpackResult.value;
+    expect(isRecord(obj)).toBe(true);
+    if (!isRecord(obj)) return;
+    
     expect(obj['x`y']).toBeDefined();
-    const xyArray = obj['x`y'] as unknown[];
-    expect(Array.isArray(xyArray)).toBe(true);
+    const xyArray = obj['x`y'];
+    expect(isArray(xyArray)).toBe(true);
+    if (!isArray(xyArray)) return;
+    
     expect(xyArray).toHaveLength(2);
     
     // Check first item
@@ -72,7 +78,10 @@ describe('backtick arrays', () => {
     expect(isOk(unpackResult)).toBe(true);
     if (!isOk(unpackResult)) return;
     
-    const obj = unpackResult.value as Record<string, unknown>;
+    const obj = unpackResult.value;
+    expect(isRecord(obj)).toBe(true);
+    if (!isRecord(obj)) return;
+    
     expect(obj.values).toBeDefined();
     expect(Array.isArray(obj.values)).toBe(true);
     expect(obj.values).toEqual([1.5, 2.5, 3.5, 4.5]);
@@ -99,10 +108,15 @@ describe('backtick arrays', () => {
     expect(isOk(unpackResult)).toBe(true);
     if (!isOk(unpackResult)) return;
     
-    const obj = unpackResult.value as Record<string, unknown>;
+    const obj = unpackResult.value;
+    expect(isRecord(obj)).toBe(true);
+    if (!isRecord(obj)) return;
+    
     expect(obj['x`y`z']).toBeDefined();
-    const xyzArray = obj['x`y`z'] as unknown[];
-    expect(Array.isArray(xyzArray)).toBe(true);
+    const xyzArray = obj['x`y`z'];
+    expect(isArray(xyzArray)).toBe(true);
+    if (!isArray(xyzArray)) return;
+    
     expect(xyzArray).toHaveLength(2);
     
     // Check items
@@ -129,7 +143,10 @@ describe('backtick arrays', () => {
     expect(isOk(unpackResult)).toBe(true);
     if (!isOk(unpackResult)) return;
     
-    const obj = unpackResult.value as Record<string, unknown>;
+    const obj = unpackResult.value;
+    expect(isRecord(obj)).toBe(true);
+    if (!isRecord(obj)) return;
+    
     expect(obj.count).toBe(99);
     expect(obj['x`y']).toEqual([{ x: 10, y: 20 }]);
     expect(obj.extra).toBe(77);
@@ -154,7 +171,10 @@ describe('backtick arrays', () => {
     expect(isOk(unpackResult)).toBe(true);
     if (!isOk(unpackResult)) return;
     
-    const obj = unpackResult.value as Record<string, unknown>;
+    const obj = unpackResult.value;
+    expect(isRecord(obj)).toBe(true);
+    if (!isRecord(obj)) return;
+    
     // With backtick arrays disabled, should use old format
     expect(obj.x_0).toBe(1.0);
     expect(obj.y_0).toBe(2.0);

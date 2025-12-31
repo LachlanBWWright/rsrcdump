@@ -85,7 +85,7 @@ describe("rsrcdump-ts", () => {
             structSpecs.push(trimmed);
           }
         }
-      } catch (e) {
+      } catch {
         // sample-specs.txt not found, continue without it
       }
 
@@ -203,12 +203,12 @@ describe("rsrcdump-ts", () => {
           }
 
           // Compare resource properties
-          expect(regenRes!.num).toBe(res.num);
-          expect(regenRes!.flags).toBe(res.flags);
-          expect(regenRes!.data.length).toBe(res.data.length);
+          expect(regenRes.num).toBe(res.num);
+          expect(regenRes.flags).toBe(res.flags);
+          expect(regenRes.data.length).toBe(res.data.length);
 
           // Compare data bytes exactly
-          expect(Buffer.from(regenRes!.data)).toEqual(Buffer.from(res.data));
+          expect(Buffer.from(regenRes.data)).toEqual(Buffer.from(res.data));
         }
       }
     });

@@ -4,7 +4,7 @@
 
 import { Unpacker, Packer, calcsize } from './packutils.js';
 import { Result, ok, err } from './result.js';
-import { bytesToHex, hexToBytes } from './buffer-utils.js';
+import { bytesToHex, hexToBytes, isRecord } from './buffer-utils.js';
 
 export interface BacktickGroup {
   baseName: string;
@@ -320,7 +320,7 @@ export function pack(template: StructTemplate, obj: unknown): Result<Uint8Array,
  * Packs a single record
  */
 function packRecord(template: StructTemplate, jsonObj: unknown): Result<Uint8Array, string> {
-  function processJsonField(fieldFormat: string, fieldValue: unknown): number | Uint8Array {
+  function processJsonField(fieldFormat: string, fieldValue: unknown): number | Uint8Array | boolean {
     if (fieldFormat.endsWith('s')) {
       // Convert hex string back to bytes
       if (typeof fieldValue === 'string') {
@@ -330,9 +330,21 @@ function packRecord(template: StructTemplate, jsonObj: unknown): Result<Uint8Arr
         return fieldValue;
       }
       throw new Error(`Expected string or Uint8Array for field format ${fieldFormat}`);
+    } else if (fieldFormat === '?') {
+      // Boolean format
+      if (typeof fieldValue === 'boolean') {
+        return fieldValue;
+      }
+      if (typeof fieldValue === 'number') {
+        return fieldValue !== 0;
+      }
+      throw new Error(`Expected boolean for field format ${fieldFormat}`);
     } else {
       if (typeof fieldValue === 'number') {
         return fieldValue;
+      }
+      if (typeof fieldValue === 'boolean') {
+        return fieldValue ? 1 : 0;
       }
       throw new Error(`Expected number for field format ${fieldFormat}`);
     }
@@ -358,11 +370,11 @@ function packRecord(template: StructTemplate, jsonObj: unknown): Result<Uint8Arr
       !template.fieldNames.every(name => !name || name.startsWith('.field'));
     
     if (hasRealFieldNames) {
-      if (typeof jsonObj !== 'object' || Array.isArray(jsonObj) || jsonObj === null) {
+      if (!isRecord(jsonObj)) {
         return err('Expected object for named fields');
       }
 
-      const obj = jsonObj as Record<string, unknown>;
+      const obj = jsonObj;
       const values: (number | Uint8Array)[] = [];
 
       for (let i = 0; i < template.fieldFormats.length; i++) {

@@ -4,6 +4,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { Unpacker, Packer, calcsize } from './packutils.js';
+import { asUint8Array } from './buffer-utils.js';
 
 describe('Additional Struct Format Types', () => {
   describe('char (c) type', () => {
@@ -13,9 +14,9 @@ describe('Additional Struct Format Types', () => {
       const result = unpacker.unpack('>3c');
       expect(result).toHaveLength(3);
       expect(result[0]).toBeInstanceOf(Uint8Array);
-      expect((result[0] as Uint8Array)[0]).toBe(65);
-      expect((result[1] as Uint8Array)[0]).toBe(66);
-      expect((result[2] as Uint8Array)[0]).toBe(67);
+      expect(asUint8Array(result[0])[0]).toBe(65);
+      expect(asUint8Array(result[1])[0]).toBe(66);
+      expect(asUint8Array(result[2])[0]).toBe(67);
     });
 
     it('should pack char values', () => {

@@ -6,16 +6,23 @@
 import type { ResourceFork } from "./resfork.js";
 import { resourceForkFromBytes, packResourceFork } from "./resfork.js";
 import { unpackAdf, packAdf, ADF_ENTRYNUM_RESOURCEFORK } from "./adf.js";
-import { resourceForkToJsonString, jsonToResourceFork, type JsonOptions } from "./jsonio.js";
-import { getStandardConverters, StructConverter } from "./resconverters.js";
+import { resourceForkToJsonString, jsonToResourceFork, type JsonOptions, type JsonBlob } from "./jsonio.js";
+import { getStandardConverters, StructConverter, type ResourceConverter } from "./resconverters.js";
 import {
   structTemplateFromString,
   structTemplateFromStringWithTypename,
 } from "./structtemplate.js";
 import { parseTypeName } from "./textio.js";
-import { bytesToBinary } from "./buffer-utils.js";
+import { bytesToBinary, isRecord, isNumber } from "./buffer-utils.js";
 import type { Result } from "./result.js";
-import { ok, isOk } from "./result.js";
+import { ok, isOk, err } from "./result.js";
+
+function isJsonBlob(value: unknown): value is JsonBlob {
+  if (!isRecord(value)) return false;
+  const metadata = value._metadata;
+  if (!isRecord(metadata)) return false;
+  return isNumber(metadata.junk1) && isNumber(metadata.junk2) && isNumber(metadata.file_attributes);
+}
 
 export type { Ok, Err, Result } from "./result.js";
 export { ok, err, isOk, isErr, unwrap, map, andThen } from "./result.js";
@@ -152,13 +159,17 @@ export async function loadBytesFromJsonAsync(
   skipTypes: string[] = [],
   adf = true,
 ): Promise<Result<Uint8Array, string>> {
+  if (!isJsonBlob(jsonBlob)) {
+    return err("Invalid JSON blob: missing or invalid _metadata");
+  }
+
   const converters = await getConverters(structSpecs);
 
   const onlyTypeBytes = onlyTypes.map((t) => parseTypeName(t));
   const skipTypeBytes = skipTypes.map((t) => parseTypeName(t));
 
   const forkResult = jsonToResourceFork(
-    jsonBlob as any,
+    jsonBlob,
     converters,
     onlyTypeBytes,
     skipTypeBytes,
@@ -196,13 +207,17 @@ export function loadBytesFromJson(
   skipTypes: string[] = [],
   adf = true,
 ): Result<Uint8Array, string> {
+  if (!isJsonBlob(jsonBlob)) {
+    return err("Invalid JSON blob: missing or invalid _metadata");
+  }
+
   const converters = getConvertersSync(structSpecs);
 
   const onlyTypeBytes = onlyTypes.map((t) => parseTypeName(t));
   const skipTypeBytes = skipTypes.map((t) => parseTypeName(t));
 
   const forkResult = jsonToResourceFork(
-    jsonBlob as any,
+    jsonBlob,
     converters,
     onlyTypeBytes,
     skipTypeBytes,
@@ -233,7 +248,7 @@ export function loadBytesFromJson(
 /**
  * Gets converters with custom struct specs
  */
-async function getConverters(structSpecs: string[]): Promise<Map<string, any>> {
+async function getConverters(structSpecs: string[]): Promise<Map<string, ResourceConverter>> {
   const converters = getStandardConverters();
 
   for (const templateArg of structSpecs) {
@@ -251,7 +266,7 @@ async function getConverters(structSpecs: string[]): Promise<Map<string, any>> {
 /**
  * Gets converters synchronously
  */
-function getConvertersSync(structSpecs: string[]): Map<string, any> {
+function getConvertersSync(structSpecs: string[]): Map<string, ResourceConverter> {
   const converters = getStandardConverters();
 
   for (const templateArg of structSpecs) {

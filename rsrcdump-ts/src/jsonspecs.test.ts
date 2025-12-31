@@ -177,7 +177,7 @@ describe('jsonspecs', () => {
       const spec: StructSpecJson = {
         resourceType: 'Bad',
         fields: [
-          { name: 'x', type: 'unknown_type' as any }
+          { name: 'x', type: 'unknown_type' }
         ]
       };
 
@@ -224,7 +224,7 @@ describe('jsonspecs', () => {
         },
         {
           resourceType: 'Bad',
-          fields: [{ name: 'y', type: 'bad_type' as any }]
+          fields: [{ name: 'y', type: 'bad_type' }]
         }
       ];
 
