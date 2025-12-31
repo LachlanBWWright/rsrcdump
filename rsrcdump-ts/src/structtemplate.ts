@@ -320,7 +320,7 @@ export function pack(template: StructTemplate, obj: unknown): Result<Uint8Array,
  * Packs a single record
  */
 function packRecord(template: StructTemplate, jsonObj: unknown): Result<Uint8Array, string> {
-  function processJsonField(fieldFormat: string, fieldValue: unknown): number | Uint8Array | boolean {
+  function processJsonField(fieldFormat: string, fieldValue: unknown): number | Uint8Array {
     if (fieldFormat.endsWith('s')) {
       // Convert hex string back to bytes
       if (typeof fieldValue === 'string') {
@@ -331,12 +331,12 @@ function packRecord(template: StructTemplate, jsonObj: unknown): Result<Uint8Arr
       }
       throw new Error(`Expected string or Uint8Array for field format ${fieldFormat}`);
     } else if (fieldFormat === '?') {
-      // Boolean format
+      // Boolean format - convert to number for packing
       if (typeof fieldValue === 'boolean') {
-        return fieldValue;
+        return fieldValue ? 1 : 0;
       }
       if (typeof fieldValue === 'number') {
-        return fieldValue !== 0;
+        return fieldValue !== 0 ? 1 : 0;
       }
       throw new Error(`Expected boolean for field format ${fieldFormat}`);
     } else {
@@ -375,18 +375,67 @@ function packRecord(template: StructTemplate, jsonObj: unknown): Result<Uint8Arr
       }
 
       const obj = jsonObj;
-      const values: (number | Uint8Array)[] = [];
+      const values: (number | Uint8Array)[] = new Array(template.fieldFormats.length);
+      const processedIndices = new Set<number>();
 
+      // First, handle backtick arrays by expanding them back into individual fields
+      if (template.backtickGroups.length > 0) {
+        for (const group of template.backtickGroups) {
+          const arrayData = obj[group.baseName];
+          if (!Array.isArray(arrayData)) {
+            // Backtick array not found in JSON, try reading individual fields
+            continue;
+          }
+
+          for (let i = 0; i < group.count; i++) {
+            const itemData = arrayData[i];
+            
+            for (let j = 0; j < group.fieldsPerItem; j++) {
+              const valueIndex = group.startIndex + (i * group.fieldsPerItem) + j;
+              const fieldFormat = template.fieldFormats[valueIndex];
+              const fieldName = template.fieldNames[valueIndex];
+              
+              if (!fieldFormat || !fieldName) continue;
+              
+              // Extract base field name (remove _N suffix)
+              const underscorePos = fieldName.lastIndexOf('_');
+              const baseName = underscorePos > 0 ? fieldName.slice(0, underscorePos) : fieldName;
+              
+              let fieldValue: unknown;
+              if (group.fieldsPerItem === 1) {
+                // Single field per item, value is directly in array
+                fieldValue = itemData;
+              } else if (isRecord(itemData)) {
+                // Multiple fields per item, value is in object
+                fieldValue = itemData[baseName];
+              } else {
+                fieldValue = undefined;
+              }
+              
+              if (fieldValue !== undefined) {
+                values[valueIndex] = processJsonField(fieldFormat, fieldValue);
+                processedIndices.add(valueIndex);
+              }
+            }
+          }
+        }
+      }
+
+      // Then process regular fields that aren't part of backtick groups
       for (let i = 0; i < template.fieldFormats.length; i++) {
+        if (processedIndices.has(i)) continue;
+        
         const fieldFormat = template.fieldFormats[i];
         const fieldName = template.fieldNames[i];
         if (!fieldFormat || !fieldName) continue;
 
         const value = obj[fieldName];
-        values.push(processJsonField(fieldFormat, value));
+        values[i] = processJsonField(fieldFormat, value);
       }
 
-      return ok(packer.pack(template.format, ...values));
+      // Filter out undefined values (from 'x' padding fields)
+      const filteredValues = values.filter(v => v !== undefined);
+      return ok(packer.pack(template.format, ...filteredValues));
     } else {
       if (!Array.isArray(jsonObj)) {
         return err('Expected array for unnamed fields');
