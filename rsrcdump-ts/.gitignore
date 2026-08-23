@@ -1,6 +1,7 @@
 node_modules/
 dist/
 build/
+coverage/
 *.rsrc
 *.json
 *.tgz

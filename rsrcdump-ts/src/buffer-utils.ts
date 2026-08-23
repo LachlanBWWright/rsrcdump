@@ -4,6 +4,94 @@
  */
 
 /**
+ * Type guard: asserts value is a number from unpack result
+ */
+export function asNumber(value: number | Uint8Array | boolean | undefined): number {
+  if (typeof value === 'number') {
+    return value;
+  }
+  throw new Error(`Expected number but got ${typeof value}`);
+}
+
+/**
+ * Type guard: asserts value is a Uint8Array from unpack result
+ */
+export function asUint8Array(value: number | Uint8Array | boolean | undefined): Uint8Array {
+  if (value instanceof Uint8Array) {
+    return value;
+  }
+  throw new Error(`Expected Uint8Array but got ${typeof value}`);
+}
+
+/**
+ * Type guard: asserts value is a boolean from unpack result  
+ */
+export function asBoolean(value: number | Uint8Array | boolean | undefined): boolean {
+  if (typeof value === 'boolean') {
+    return value;
+  }
+  throw new Error(`Expected boolean but got ${typeof value}`);
+}
+
+/**
+ * Type guard for pack values: asserts value is a Uint8Array
+ */
+export function asPackUint8Array(value: number | Uint8Array | bigint | undefined): Uint8Array {
+  if (value instanceof Uint8Array) {
+    return value;
+  }
+  throw new Error(`Expected Uint8Array but got ${typeof value}`);
+}
+
+/**
+ * Type guard for pack values: asserts value is a number
+ */
+export function asPackNumber(value: number | Uint8Array | bigint | undefined): number {
+  if (typeof value === 'number') {
+    return value;
+  }
+  throw new Error(`Expected number but got ${typeof value}`);
+}
+
+/**
+ * Type guard for pack values: asserts value is a number or bigint, returns as number or bigint
+ */
+export function asPackNumberOrBigint(value: number | Uint8Array | bigint | undefined): number | bigint {
+  if (typeof value === 'number' || typeof value === 'bigint') {
+    return value;
+  }
+  throw new Error(`Expected number or bigint but got ${typeof value}`);
+}
+
+/**
+ * Type guard: checks if value is a record (plain object)
+ */
+export function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Type guard: checks if value is an array
+ */
+export function isArray(value: unknown): value is unknown[] {
+  return Array.isArray(value);
+}
+
+/**
+ * Type guard: checks if value is a number
+ */
+export function isNumber(value: unknown): value is number {
+  return typeof value === 'number';
+}
+
+/**
+ * Type guard: checks if value is a boolean
+ */
+export function isBoolean(value: unknown): value is boolean {
+  return typeof value === 'boolean';
+}
+
+/**
  * Convert bytes to hex string
  */
 export function bytesToHex(data: Uint8Array | ArrayBuffer): string {

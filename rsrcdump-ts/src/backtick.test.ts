@@ -5,6 +5,7 @@
 import { describe, it, expect } from 'vitest';
 import { structTemplateFromString, unpackRecord } from './structtemplate';
 import { isOk } from './result';
+import { isRecord, isArray } from './buffer-utils';
 
 describe('backtick arrays', () => {
   it('detects backtick groups in struct templates', () => {
@@ -38,18 +39,24 @@ describe('backtick arrays', () => {
     expect(isOk(unpackResult)).toBe(true);
     if (!isOk(unpackResult)) return;
     
-    const obj = unpackResult.value as any;
+    const obj = unpackResult.value;
+    expect(isRecord(obj)).toBe(true);
+    if (!isRecord(obj)) return;
+    
     expect(obj['x`y']).toBeDefined();
-    expect(Array.isArray(obj['x`y'])).toBe(true);
-    expect(obj['x`y']).toHaveLength(2);
+    const xyArray = obj['x`y'];
+    expect(isArray(xyArray)).toBe(true);
+    if (!isArray(xyArray)) return;
+    
+    expect(xyArray).toHaveLength(2);
     
     // Check first item
-    expect(obj['x`y'][0]).toHaveProperty('x', 1.0);
-    expect(obj['x`y'][0]).toHaveProperty('y', 2.0);
+    expect(xyArray[0]).toHaveProperty('x', 1.0);
+    expect(xyArray[0]).toHaveProperty('y', 2.0);
     
     // Check second item
-    expect(obj['x`y'][1]).toHaveProperty('x', 3.0);
-    expect(obj['x`y'][1]).toHaveProperty('y', 4.0);
+    expect(xyArray[1]).toHaveProperty('x', 3.0);
+    expect(xyArray[1]).toHaveProperty('y', 4.0);
   });
 
   it('handles single-field backtick arrays', () => {
@@ -71,7 +78,10 @@ describe('backtick arrays', () => {
     expect(isOk(unpackResult)).toBe(true);
     if (!isOk(unpackResult)) return;
     
-    const obj = unpackResult.value as any;
+    const obj = unpackResult.value;
+    expect(isRecord(obj)).toBe(true);
+    if (!isRecord(obj)) return;
+    
     expect(obj.values).toBeDefined();
     expect(Array.isArray(obj.values)).toBe(true);
     expect(obj.values).toEqual([1.5, 2.5, 3.5, 4.5]);
@@ -98,14 +108,20 @@ describe('backtick arrays', () => {
     expect(isOk(unpackResult)).toBe(true);
     if (!isOk(unpackResult)) return;
     
-    const obj = unpackResult.value as any;
+    const obj = unpackResult.value;
+    expect(isRecord(obj)).toBe(true);
+    if (!isRecord(obj)) return;
+    
     expect(obj['x`y`z']).toBeDefined();
-    expect(Array.isArray(obj['x`y`z'])).toBe(true);
-    expect(obj['x`y`z']).toHaveLength(2);
+    const xyzArray = obj['x`y`z'];
+    expect(isArray(xyzArray)).toBe(true);
+    if (!isArray(xyzArray)) return;
+    
+    expect(xyzArray).toHaveLength(2);
     
     // Check items
-    expect(obj['x`y`z'][0]).toEqual({ x: 10, y: 20, z: 30 });
-    expect(obj['x`y`z'][1]).toEqual({ x: 40, y: 50, z: 60 });
+    expect(xyzArray[0]).toEqual({ x: 10, y: 20, z: 30 });
+    expect(xyzArray[1]).toEqual({ x: 40, y: 50, z: 60 });
   });
 
   it('preserves non-backtick fields alongside backtick arrays', () => {
@@ -127,7 +143,10 @@ describe('backtick arrays', () => {
     expect(isOk(unpackResult)).toBe(true);
     if (!isOk(unpackResult)) return;
     
-    const obj = unpackResult.value as any;
+    const obj = unpackResult.value;
+    expect(isRecord(obj)).toBe(true);
+    if (!isRecord(obj)) return;
+    
     expect(obj.count).toBe(99);
     expect(obj['x`y']).toEqual([{ x: 10, y: 20 }]);
     expect(obj.extra).toBe(77);
@@ -152,7 +171,10 @@ describe('backtick arrays', () => {
     expect(isOk(unpackResult)).toBe(true);
     if (!isOk(unpackResult)) return;
     
-    const obj = unpackResult.value as any;
+    const obj = unpackResult.value;
+    expect(isRecord(obj)).toBe(true);
+    if (!isRecord(obj)) return;
+    
     // With backtick arrays disabled, should use old format
     expect(obj.x_0).toBe(1.0);
     expect(obj.y_0).toBe(2.0);

@@ -5,6 +5,7 @@
 import { describe, it, expect } from 'vitest';
 import { structTemplateFromString, unpackRecord } from './structtemplate.js';
 import { Packer } from './packutils.js';
+import { isRecord } from './buffer-utils.js';
 
 describe('Zero value handling', () => {
   it('should preserve zero values in named fields', () => {
@@ -24,7 +25,9 @@ describe('Zero value handling', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     
-    const obj = result.value as Record<string, number>;
+    const obj = result.value;
+    expect(isRecord(obj)).toBe(true);
+    if (!isRecord(obj)) return;
     console.log('Result:', obj);
     
     // This should pass but currently fails if zero becomes null/undefined
@@ -49,7 +52,9 @@ describe('Zero value handling', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     
-    const obj = result.value as Record<string, number[]>;
+    const obj = result.value;
+    expect(isRecord(obj)).toBe(true);
+    if (!isRecord(obj)) return;
     console.log('Array result:', obj);
     
     // Should preserve all values including zeros
@@ -92,7 +97,9 @@ describe('Zero value handling', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     
-    const obj = result.value as Record<string, boolean>;
+    const obj = result.value;
+    expect(isRecord(obj)).toBe(true);
+    if (!isRecord(obj)) return;
     console.log('Boolean result:', obj);
     
     // Should preserve false, not convert to null/undefined
@@ -117,7 +124,9 @@ describe('Zero value handling', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     
-    const obj = result.value as Record<string, number>;
+    const obj = result.value;
+    expect(isRecord(obj)).toBe(true);
+    if (!isRecord(obj)) return;
     console.log('Empty name result:', obj);
     
     // First field should have fallback name and value should be 0

@@ -85,7 +85,7 @@ describe("rsrcdump-ts", () => {
             structSpecs.push(trimmed);
           }
         }
-      } catch (e) {
+      } catch {
         // sample-specs.txt not found, continue without it
       }
 
@@ -152,7 +152,7 @@ describe("rsrcdump-ts", () => {
       // Convert back to binary
       const bytesResult = loadBytesFromJson(jsonBlob, structSpecs);
       if (!isOk(bytesResult)) {
-        // eslint-disable-next-line no-console
+         
         console.error("loadBytesFromJson failed:", bytesResult.error);
         try {
           await writeFile(
@@ -160,10 +160,10 @@ describe("rsrcdump-ts", () => {
             JSON.stringify(jsonBlob, null, 2),
             "utf-8",
           );
-          // eslint-disable-next-line no-console
+           
           console.error("Wrote diagnostic JSON to ../diagnostic_ts_json.json");
         } catch (e) {
-          // eslint-disable-next-line no-console
+           
           console.error("Failed to write diagnostic JSON:", e);
         }
       }
@@ -203,12 +203,12 @@ describe("rsrcdump-ts", () => {
           }
 
           // Compare resource properties
-          expect(regenRes!.num).toBe(res.num);
-          expect(regenRes!.flags).toBe(res.flags);
-          expect(regenRes!.data.length).toBe(res.data.length);
+          expect(regenRes.num).toBe(res.num);
+          expect(regenRes.flags).toBe(res.flags);
+          expect(regenRes.data.length).toBe(res.data.length);
 
           // Compare data bytes exactly
-          expect(Buffer.from(regenRes!.data)).toEqual(Buffer.from(res.data));
+          expect(Buffer.from(regenRes.data)).toEqual(Buffer.from(res.data));
         }
       }
     });

@@ -65,7 +65,7 @@ describe("Performance", () => {
     const jsonBlob = JSON.parse(jsonResult.value);
     const bytesResult = await loadBytesFromJsonAsync(jsonBlob, structSpecs);
     if (!isOk(bytesResult)) {
-      // eslint-disable-next-line no-console
+       
       console.error(
         "loadBytesFromJsonAsync failed (performance test):",
         bytesResult.error,
@@ -76,10 +76,10 @@ describe("Performance", () => {
           JSON.stringify(jsonBlob, null, 2),
           "utf-8",
         );
-        // eslint-disable-next-line no-console
+         
         console.error("Wrote diagnostic JSON to ../diagnostic_ts_json.json");
       } catch (e) {
-        // eslint-disable-next-line no-console
+         
         console.error("Failed to write diagnostic JSON:", e);
       }
     }

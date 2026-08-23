@@ -11,7 +11,7 @@ import {
 import { ResourceConverter, Base16Converter } from "./resconverters.js";
 import { decode, encode, parseTypeName } from "./textio.js";
 import { Result, ok, err } from "./result.js";
-import { bytesToBinary, binaryToBytes } from "./buffer-utils.js";
+import { bytesToBinary, binaryToBytes, isRecord } from "./buffer-utils.js";
 
 interface ResourceWrapper {
   name?: string;
@@ -25,13 +25,19 @@ interface ResourceWrapper {
   [key: string]: unknown;
 }
 
-interface JsonBlob {
-  _metadata: {
-    junk1: number;
-    junk2: number;
-    file_attributes: number;
-    [key: string]: unknown;
-  };
+function isResourceWrapper(value: unknown): value is ResourceWrapper {
+  return isRecord(value);
+}
+
+export interface JsonBlob {
+  _metadata: JsonBlobMetadata;
+  [key: string]: unknown;
+}
+
+export interface JsonBlobMetadata {
+  junk1: number;
+  junk2: number;
+  file_attributes: number;
   [key: string]: unknown;
 }
 
@@ -50,7 +56,7 @@ export function resourceForkToJson(
   metadata: Record<string, unknown> = {},
   options: JsonOptions = {}
 ): Result<JsonBlob, string> {
-  const metadataObj: Record<string, unknown> = {
+  const metadataObj: JsonBlobMetadata = {
     junk1: fork.junkNextresmap,
     junk2: fork.junkFilerefnum,
     file_attributes: fork.fileAttributes,
@@ -58,7 +64,7 @@ export function resourceForkToJson(
   };
   
   const jsonBlob: JsonBlob = {
-    _metadata: metadataObj as JsonBlob['_metadata'],
+    _metadata: metadataObj,
   };
 
   const includeTypeKeys = new Set(
@@ -140,9 +146,9 @@ export function jsonToResourceFork(
     return err("Missing _metadata in JSON");
   }
 
-  fork.fileAttributes = metadata.file_attributes as number;
-  fork.junkNextresmap = metadata.junk1 as number;
-  fork.junkFilerefnum = metadata.junk2 as number;
+  fork.fileAttributes = metadata.file_attributes;
+  fork.junkNextresmap = metadata.junk1;
+  fork.junkFilerefnum = metadata.junk2;
 
   const onlyTypeKeys = new Set(
     onlyTypes.map((t) => bytesToBinary(t)),
@@ -175,23 +181,21 @@ export function jsonToResourceFork(
 
     const converter = converters.get(typeKey) || new Base16Converter();
 
-    if (typeof typeRecords !== "object" || typeRecords === null) {
+    if (!isRecord(typeRecords)) {
       return err(`Type ${typeName} is not an object`);
     }
 
-    for (const [resIdStr, resBlob] of Object.entries(
-      typeRecords as Record<string, unknown>,
-    )) {
-      if (typeof resBlob !== "object" || resBlob === null) {
+    for (const [resIdStr, resBlob] of Object.entries(typeRecords)) {
+      if (!isResourceWrapper(resBlob)) {
         return err(`Resource ${typeName} #${resIdStr} is not an object`);
       }
 
-      const wrapper = resBlob as ResourceWrapper;
+      const wrapper = resBlob;
 
       const resNum = parseInt(resIdStr, 10);
-      const resName = encode(wrapper.name || "", "replace");
-      const resFlags = wrapper.flags || 0;
-      const resJunk = wrapper.junk || 0;
+      const resName = encode(wrapper.name ?? "", "replace");
+      const resFlags = wrapper.flags ?? 0;
+      const resJunk = wrapper.junk ?? 0;
       const resOrder = wrapper.order !== undefined ? wrapper.order : -1;
 
       // Prefer converter-specific JSON key (e.g., 'obj'), but fall back to base16 'data' when present

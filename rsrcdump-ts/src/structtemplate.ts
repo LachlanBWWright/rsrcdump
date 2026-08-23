@@ -2,9 +2,11 @@
  * Struct template parsing for custom resource formats
  */
 
-import { Unpacker, Packer, calcsize } from './packutils.js';
+import { calcsize } from './packutils.js';
 import { Result, ok, err } from './result.js';
-import { bytesToHex, hexToBytes } from './buffer-utils.js';
+
+export { unpackRecord } from "./structtemplate-unpack.js";
+export { pack } from "./structtemplate-pack.js";
 
 export interface BacktickGroup {
   baseName: string;
@@ -17,7 +19,7 @@ export interface StructTemplate {
   format: string;
   recordLength: number;
   fieldFormats: string[];
-  fieldNames: Array<string | null>;
+  fieldNames: (string | null)[];
   isList: boolean;
   isScalar: boolean;
   backtickGroups: BacktickGroup[];
@@ -30,16 +32,14 @@ function splitStructFormatFields(fmt: string): string[] {
   const fields: string[] = [];
   let repeat = 0;
 
-  for (let i = 0; i < fmt.length; i++) {
-    const c = fmt[i];
-
+  for (const c of fmt) {
     // Ignore endianness markers and whitespace
     if (c === ' ' || c === '@' || c === '!' || c === '>' || c === '<' || c === '=') {
       continue;
     }
 
     // Parse repeat count
-    if (c && /[0-9]/.test(c)) {
+    if (/[0-9]/.test(c)) {
       if (repeat !== 0) {
         repeat *= 10;
       }
@@ -48,15 +48,15 @@ function splitStructFormatFields(fmt: string): string[] {
     }
 
     // Handle field types
-    if (c && ('CB?HILFQDcbhilfdq'.toUpperCase().includes(c.toUpperCase()) || c === 'x')) {
+    if ('CB?HILFQDcbhilfdq'.toUpperCase().includes(c.toUpperCase()) || c === 'x') {
       for (let j = 0; j < Math.max(repeat, 1); j++) {
         fields.push(c);
       }
       repeat = 0;
-    } else if (c && c === 's') {
+    } else if (c === 's') {
       fields.push(`${Math.max(repeat, 1)}${c}`);
       repeat = 0;
-    } else if (c) {
+    } else {
       throw new Error(`Unsupported struct format character '${c}'`);
     }
   }
@@ -147,7 +147,7 @@ export function structTemplateFromString(template: string): Result<StructTemplat
   }
 
   // Match field names to field formats
-  const finalFieldNames: Array<string | null> = [];
+  const finalFieldNames: (string | null)[] = [];
   let userFieldIdx = 0;
 
   for (let fieldNumber = 0; fieldNumber < fieldFormats.length; fieldNumber++) {
@@ -184,211 +184,6 @@ export function structTemplateFromString(template: string): Result<StructTemplat
   });
 }
 
-/**
- * Unpacks a single record using a struct template
- */
-export function unpackRecord(
-  template: StructTemplate,
-  data: Uint8Array,
-  offset: number,
-  options?: { useCamelCase?: boolean; useBacktickArrays?: boolean }
-): Result<unknown, string> {
-  try {
-    const u = new Unpacker(data, offset);
-    const values = u.unpack(template.format);
-    const useBacktickArrays = options?.useBacktickArrays ?? true;
-    return ok(tagValues(template, values, useBacktickArrays));
-  } catch (e) {
-    return err(`Failed to unpack record: ${e}`);
-  }
-}
-
-/**
- * Tags values with field names, supporting backtick macro arrays
- */
-function tagValues(template: StructTemplate, values: (number | Uint8Array | boolean)[], useBacktickArrays: boolean = true): unknown {
-  // Check if we have any real user-provided field names (not just fallbacks)
-  const hasRealFieldNames = template.fieldNames.length > 0 && 
-    !template.fieldNames.every(name => !name || name.startsWith('.field'));
-
-  if (hasRealFieldNames) {
-    if (template.fieldNames.length !== values.length) {
-      throw new Error(
-        `Number of field names (${template.fieldNames.length}) does not match number of values (${values.length})`
-      );
-    }
-
-    const record: Record<string, number | boolean | Uint8Array | string | unknown[]> = {};
-    const usedIndices = new Set<number>();
-
-    // Handle backtick groups as arrays if enabled
-    if (useBacktickArrays && template.backtickGroups.length > 0) {
-      for (const group of template.backtickGroups) {
-        const arrayItems: unknown[] = [];
-
-        for (let i = 0; i < group.count; i++) {
-          const itemData: Record<string, number | boolean | Uint8Array | string> = {};
-          
-          for (let j = 0; j < group.fieldsPerItem; j++) {
-            const valueIndex = group.startIndex + (i * group.fieldsPerItem) + j;
-            const fieldName = template.fieldNames[valueIndex];
-            const value = values[valueIndex];
-            
-            if (fieldName != null && value !== undefined) {
-              // Extract base field name (remove _N suffix)
-              const underscorePos = fieldName.lastIndexOf('_');
-              const baseName = underscorePos > 0 ? fieldName.slice(0, underscorePos) : fieldName;
-              
-              if (value instanceof Uint8Array) {
-                itemData[baseName] = bytesToHex(value);
-              } else {
-                itemData[baseName] = value;
-              }
-              usedIndices.add(valueIndex);
-            }
-          }
-          
-          // If single field per item, just push the value
-          if (group.fieldsPerItem === 1 && Object.keys(itemData).length === 1) {
-            arrayItems.push(Object.values(itemData)[0]);
-          } else {
-            arrayItems.push(itemData);
-          }
-        }
-        
-        record[group.baseName] = arrayItems;
-      }
-    }
-    
-    // Add remaining fields that aren't part of backtick groups
-    for (let i = 0; i < template.fieldNames.length; i++) {
-      if (usedIndices.has(i)) {
-        continue;
-      }
-      
-      const name = template.fieldNames[i];
-      const value = values[i];
-      if (name != null && value !== undefined) {
-        // Convert byte strings to hex for JSON serialization
-        if (value instanceof Uint8Array) {
-          record[name] = bytesToHex(value);
-        } else {
-          record[name] = value;
-        }
-      }
-    }
-    return record;
-  } else if (template.isScalar) {
-    return values[0];
-  } else {
-    // Return array for unnamed multi-field records
-    return values.map(v => v instanceof Uint8Array ? bytesToHex(v) : v);
-  }
-}
-
-/**
- * Packs data using a struct template
- */
-export function pack(template: StructTemplate, obj: unknown): Result<Uint8Array, string> {
-  if (!template.isList) {
-    return packRecord(template, obj);
-  } else {
-    if (!Array.isArray(obj)) {
-      return err('Expected array for list template');
-    }
-
-    const buffers: Uint8Array[] = [];
-    for (const item of obj) {
-      const result = packRecord(template, item);
-      if (!result.ok) {
-        return result;
-      }
-      buffers.push(result.value);
-    }
-
-    const totalLength = buffers.reduce((sum, buf) => sum + buf.length, 0);
-    const result = new Uint8Array(totalLength);
-    let offset = 0;
-    for (const buf of buffers) {
-      result.set(buf, offset);
-      offset += buf.length;
-    }
-
-    return ok(result);
-  }
-}
-
-/**
- * Packs a single record
- */
-function packRecord(template: StructTemplate, jsonObj: unknown): Result<Uint8Array, string> {
-  function processJsonField(fieldFormat: string, fieldValue: unknown): number | Uint8Array {
-    if (fieldFormat.endsWith('s')) {
-      // Convert hex string back to bytes
-      if (typeof fieldValue === 'string') {
-        return hexToBytes(fieldValue);
-      }
-      return fieldValue as Uint8Array;
-    } else {
-      return fieldValue as number;
-    }
-  }
-
-  try {
-    const packer = new Packer();
-    
-    if (template.isScalar) {
-      if (Array.isArray(jsonObj) || (typeof jsonObj === 'object' && jsonObj !== null)) {
-        return err(`json_obj must not be a list or dict ${jsonObj}`);
-      }
-      const value = processJsonField(template.fieldFormats[0]!, jsonObj);
-      return ok(packer.pack(template.format, value));
-    }
-    
-    // Check if we have real user-provided field names
-    const hasRealFieldNames = template.fieldNames.length > 0 && 
-      !template.fieldNames.every(name => !name || name.startsWith('.field'));
-    
-    if (hasRealFieldNames) {
-      if (typeof jsonObj !== 'object' || Array.isArray(jsonObj) || jsonObj === null) {
-        return err('Expected object for named fields');
-      }
-
-      const obj = jsonObj as Record<string, unknown>;
-      const values: (number | Uint8Array)[] = [];
-
-      for (let i = 0; i < template.fieldFormats.length; i++) {
-        const fieldFormat = template.fieldFormats[i];
-        const fieldName = template.fieldNames[i];
-        if (!fieldFormat || !fieldName) continue;
-
-        const value = obj[fieldName];
-        values.push(processJsonField(fieldFormat, value));
-      }
-
-      return ok(packer.pack(template.format, ...values));
-    } else {
-      if (!Array.isArray(jsonObj)) {
-        return err('Expected array for unnamed fields');
-      }
-
-      const values: (number | Uint8Array)[] = [];
-      for (let i = 0; i < template.fieldFormats.length; i++) {
-        const fieldFormat = template.fieldFormats[i];
-        if (!fieldFormat) continue;
-        values.push(processJsonField(fieldFormat, jsonObj[i]));
-      }
-
-      return ok(packer.pack(template.format, ...values));
-    }
-  } catch (e) {
-    return err(`Failed to pack record: ${e}`);
-  }
-}
-
-/**
- * Creates a struct template from a template string with typename
- */
 export async function structTemplateFromStringWithTypename(
   templateArg: string
 ): Promise<Result<{ converter: StructTemplate; restype: Uint8Array }, string>> {

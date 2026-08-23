@@ -214,7 +214,7 @@ export class TextConverter implements ResourceConverter {
   separateFile = '';
   jsonKey = 'obj';
 
-  unpack(res: Resource, _fork: ResourceFork): Result<string, string> {
+  unpack(res: Resource, _fork: ResourceFork, _options?: JsonOptions): Result<string, string> {
     return ok(latin1Decode(res.data));
   }
 
