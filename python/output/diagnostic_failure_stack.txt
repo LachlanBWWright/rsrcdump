@@ -1,0 +1,3 @@
+AssertionError: expected 'The length of resource (5852 bytes) i…' to be undefined
+    at /Users/lachlanwright/Documents/rsrcdump/rsrcdump-ts/src/integration.test.ts:420:48
+    at file:///Users/lachlanwright/Documents/rsrcdump/rsrcdump-ts/node_modules/@vitest/runner/dist/index.js:915:20

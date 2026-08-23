@@ -1,51 +1,72 @@
-// Utilities for text processing and type name parsing
+/**
+ * Text encoding and resource type name utilities
+ */
 
+import { bytesToBinary, binaryToBytes, latin1Decode, latin1Encode, allocate, decode as bufDecode, encode as bufEncode } from './buffer-utils.js';
+
+let GLOBAL_ENCODING = 'macroman';
+
+export function getGlobalEncoding(): string {
+  return GLOBAL_ENCODING;
+}
+
+export function setGlobalEncoding(encoding: string): void {
+  GLOBAL_ENCODING = encoding;
+}
+
+/**
+ * Sanitizes a resource type name for use in filenames/URLs
+ */
 export function sanitizeTypeName(restype: Uint8Array): string {
   if (restype.length !== 4) {
     throw new Error(`restype isn't 4 bytes`);
   }
   
-  // Convert bytes to string, treating as raw bytes
-  let result = '';
-  for (let i = 0; i < restype.length; i++) {
-    const byte = restype[i];
-    if (byte >= 32 && byte <= 126) { // printable ASCII
-      result += String.fromCharCode(byte);
-    } else {
-      result += encodeURIComponent(String.fromCharCode(byte));
+  let trimmed = restype;
+  if (!isAllSpaces(restype)) {
+    // Remove trailing spaces
+    let end = 4;
+    while (end > 0 && trimmed[end - 1] === 0x20) {
+      end--;
+    }
+    trimmed = restype.slice(0, end);
+  }
+  
+  return encodeURIComponent(bytesToBinary(trimmed));
+}
+
+function isAllSpaces(bytes: Uint8Array): boolean {
+  for (const byte of bytes) {
+    if (byte !== 0x20) {
+      return false;
     }
   }
-  
-  // Remove trailing spaces but keep them if they're all spaces
-  if (!isAllSpaces(restype)) {
-    result = result.replace(/%20+$/, '');
-  }
-  
-  return result;
+  return true;
 }
 
+/**
+ * Parses a sanitized type name back to bytes
+ */
 export function parseTypeName(saneName: string): Uint8Array {
-  const decoded = new TextEncoder().encode(decodeURIComponent(saneName));
-  const result = new Uint8Array(4);
-  result.fill(0x20); // space character
-  
-  for (let i = 0; i < Math.min(decoded.length, 4); i++) {
-    result[i] = decoded[i];
-  }
-  
-  if (decoded.length > 4) {
+  const decoded = decodeURIComponent(saneName);
+  const bytes = binaryToBytes(decoded);
+
+  // Pad to 4 bytes with spaces
+  const padded = allocate(4, 0x20);
+  padded.set(bytes.slice(0, Math.min(bytes.length, 4)), 0);
+
+  if (bytes.length > 4) {
     throw new Error(`decoded restype doesn't work out to 4 bytes`);
   }
-  
-  return result;
+
+  return padded;
 }
 
-function isAllSpaces(data: Uint8Array): boolean {
-  return data.every(byte => byte === 0x20);
-}
-
+/**
+ * Sanitizes a resource name for use in filenames
+ */
 export function sanitizeResourceName(name: string | Uint8Array): string {
-  const str = typeof name === 'string' ? name : new TextDecoder('utf-8').decode(name);
+  const str = typeof name === 'string' ? name : latin1Decode(name);
   let sanitized = '';
   
   for (const c of str) {
@@ -55,4 +76,26 @@ export function sanitizeResourceName(name: string | Uint8Array): string {
   }
   
   return sanitized;
+}
+
+/**
+ * Decodes bytes to string using the global encoding
+ */
+export function decode(bytes: Uint8Array, _errors: 'replace' | 'ignore' = 'replace'): string {
+  // For macroman, we use a simple approximation with latin1
+  // A full macroman decoder would be more complex
+  if (GLOBAL_ENCODING === 'macroman') {
+    return latin1Decode(bytes);
+  }
+  return bufDecode(bytes, GLOBAL_ENCODING);
+}
+
+/**
+ * Encodes string to bytes using the global encoding
+ */
+export function encode(text: string, _errors: 'replace' | 'ignore' = 'replace'): Uint8Array {
+  if (GLOBAL_ENCODING === 'macroman') {
+    return latin1Encode(text);
+  }
+  return bufEncode(text, GLOBAL_ENCODING);
 }

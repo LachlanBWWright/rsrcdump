@@ -1,184 +1,290 @@
-// JSON input/output handling
+/**
+ * JSON I/O for resource forks
+ */
 
-import type {
-  ResourceFork,
-  ResourceConverter,
-  JsonOutput,
-  ConvertedResource,
-  Resource,
-} from "./types.js";
-import { Base16Converter } from "./resconverters.js";
+import type { Resource, ResourceFork } from "./resfork.js";
+import {
+  resourceNameStr,
+  createResource,
+  createResourceFork,
+} from "./resfork.js";
+import { ResourceConverter, Base16Converter } from "./resconverters.js";
+import { decode, encode, parseTypeName } from "./textio.js";
+import { Result, ok, err } from "./result.js";
+import { bytesToBinary, binaryToBytes, isRecord } from "./buffer-utils.js";
 
+interface ResourceWrapper {
+  name?: string;
+  flags?: number;
+  junk?: number;
+  order?: number;
+  data?: string;
+  obj?: unknown;
+  file?: string;
+  conversion_error?: string;
+  [key: string]: unknown;
+}
+
+function isResourceWrapper(value: unknown): value is ResourceWrapper {
+  return isRecord(value);
+}
+
+export interface JsonBlob {
+  _metadata: JsonBlobMetadata;
+  [key: string]: unknown;
+}
+
+export interface JsonBlobMetadata {
+  junk1: number;
+  junk2: number;
+  file_attributes: number;
+  [key: string]: unknown;
+}
+
+export interface JsonOptions {
+  useBacktickArrays?: boolean;
+}
+
+/**
+ * Converts a resource fork to JSON
+ */
 export function resourceForkToJson(
   fork: ResourceFork,
   includeTypes: Uint8Array[] = [],
   excludeTypes: Uint8Array[] = [],
-  converters: Map<string, ResourceConverter> = new Map(),
-  metadata: any = {},
-  quiet: boolean = false,
-): JsonOutput {
-  const jsonBlob: JsonOutput = {};
+  converters: Map<string, ResourceConverter>,
+  metadata: Record<string, unknown> = {},
+  options: JsonOptions = {}
+): Result<JsonBlob, string> {
+  const metadataObj: JsonBlobMetadata = {
+    junk1: fork.junkNextresmap,
+    junk2: fork.junkFilerefnum,
+    file_attributes: fork.fileAttributes,
+    ...metadata,
+  };
+  
+  const jsonBlob: JsonBlob = {
+    _metadata: metadataObj,
+  };
 
-  // Add metadata
-  if (metadata || fork.fileAttributes !== undefined) {
-    jsonBlob._metadata = {
-      junk1: fork.junkNextresmap,
-      junk2: fork.junkFilerefnum,
-      file_attributes: fork.fileAttributes || 0,
-      ...metadata,
-    };
-  }
+  const includeTypeKeys = new Set(
+    includeTypes.map((t) => bytesToBinary(t)),
+  );
+  const excludeTypeKeys = new Set(
+    excludeTypes.map((t) => bytesToBinary(t)),
+  );
 
-  // Convert each resource type
-  for (const [typeName, typeResources] of fork.resources) {
-    // Check include/exclude filters
-    const typeBytes = new TextEncoder().encode(typeName.padEnd(4));
-
-    if (
-      includeTypes.length > 0 &&
-      !includeTypes.some((included) =>
-        typeBytes.every((byte, i) => byte === included[i]),
-      )
-    ) {
+  for (const [typeKey, typeMap] of fork.tree) {
+    if (excludeTypeKeys.has(typeKey)) {
+      continue;
+    }
+    if (includeTypeKeys.size > 0 && !includeTypeKeys.has(typeKey)) {
       continue;
     }
 
-    if (
-      excludeTypes.some((excluded) =>
-        typeBytes.every((byte, i) => byte === excluded[i]),
-      )
-    ) {
-      continue;
-    }
+    const resType = binaryToBytes(typeKey);
+    const resTypeKey = decode(resType, "replace");
 
-    jsonBlob[typeName] = {};
+    const typeObj: Record<string, ResourceWrapper> = {};
 
-    for (const [resId, resource] of typeResources) {
-      if (!quiet) {
-        console.log(
-          `${resource.type.padEnd(4)} ${resId
-            .toString()
-            .padStart(6)} ${resource.data.length.toString().padStart(8)}  ${
-            resource.name || ""
-          }`,
-        );
+    const converter = converters.get(typeKey) || new Base16Converter();
+
+    for (const [resId, res] of typeMap) {
+      const wrapper: ResourceWrapper = {};
+
+      if (res.name.length > 0) {
+        wrapper.name = resourceNameStr(res);
       }
 
-      const wrapper: ConvertedResource = {};
-
-      if (resource.name) {
-        wrapper.name = resource.name;
+      if (res.flags !== 0) {
+        wrapper.flags = res.flags;
       }
 
-      if (resource.flags && resource.flags !== 0) {
-        wrapper.flags = resource.flags;
+      if (res.junk !== 0) {
+        wrapper.junk = res.junk;
       }
 
-      if (resource.junk && resource.junk !== 0) {
-        wrapper.junk = resource.junk;
+      if (res.order !== 0xffffffff) {
+        wrapper.order = res.order;
       }
 
-      if (resource.order && resource.order !== 0xffffffff) {
-        wrapper.order = resource.order;
-      }
-
-      // Convert resource data
-      try {
-        const converter = converters.get(typeName) || new Base16Converter();
-        const obj = converter.unpack(resource, fork);
-
-        if (converter instanceof Base16Converter) {
-          wrapper.data = obj;
-        } else {
-          wrapper.obj = obj;
+      const unpackResult = converter.unpack(res, fork, options);
+      if (!unpackResult.ok) {
+        // Keep conversion_error to indicate struct conversion failed
+        wrapper.conversion_error = unpackResult.error;
+        // Still fall back to base16 for usability
+        const base16Result = new Base16Converter().unpack(res, fork);
+        if (base16Result.ok) {
+          wrapper.data = base16Result.value;
         }
-      } catch (convertException) {
-        wrapper.conversionError = String(convertException);
-        // Fall back to base16
-        wrapper.data = new Base16Converter().unpack(resource, fork);
+      } else {
+        wrapper[converter.jsonKey] = unpackResult.value;
       }
 
-      jsonBlob[typeName][resId.toString()] = wrapper;
+      typeObj[resId.toString()] = wrapper;
     }
+
+    jsonBlob[resTypeKey] = typeObj;
   }
 
-  return jsonBlob;
+  return ok(jsonBlob);
 }
 
+/**
+ * Converts JSON to a resource fork
+ */
 export function jsonToResourceFork(
-  jsonData: JsonOutput,
-  converters: Map<string, ResourceConverter> = new Map(),
-): ResourceFork {
-  // jsonData is expected to already be a parsed JsonOutput object
+  jsonBlob: JsonBlob,
+  converters: Map<string, ResourceConverter>,
+  onlyTypes: Uint8Array[] = [],
+  skipTypes: Uint8Array[] = [],
+): Result<ResourceFork, string> {
+  const fork = createResourceFork();
 
-  const resources = new Map<string, Map<number, Resource>>();
+  const metadata = jsonBlob._metadata;
+  if (!metadata) {
+    return err("Missing _metadata in JSON");
+  }
 
-  // Extract metadata
-  const metadata = jsonData._metadata || {};
-  const fileAttributes = metadata.fileAttributes || 0;
-  const junkNextresmap = metadata.junk1 || 0;
-  const junkFilerefnum = metadata.junk2 || 0;
+  fork.fileAttributes = metadata.file_attributes;
+  fork.junkNextresmap = metadata.junk1;
+  fork.junkFilerefnum = metadata.junk2;
 
-  // Process each resource type
-  for (const [typeName, typeData] of Object.entries(jsonData)) {
-    if (typeName === "_metadata") continue;
+  const onlyTypeKeys = new Set(
+    onlyTypes.map((t) => bytesToBinary(t)),
+  );
+  const skipTypeKeys = new Set(
+    skipTypes.map((t) => bytesToBinary(t)),
+  );
 
-    const typeResources = new Map<number, Resource>();
+  for (const [typeName, typeRecords] of Object.entries(jsonBlob)) {
+    if (typeName.startsWith("_")) {
+      continue; // Skip metadata
+    }
 
-    for (const [idStr, resourceData] of Object.entries(
-      typeData as Record<string, ConvertedResource>,
-    )) {
-      const id = parseInt(idStr, 10);
+    if (typeName.length > 4) {
+      continue; // Probably not a resource type
+    }
 
-      // Convert resource data back to binary
-      let data: Uint8Array;
+    const resType = parseTypeName(typeName);
+    const typeKey = bytesToBinary(resType);
 
-      if (resourceData.obj !== undefined) {
-        // Use converter to pack structured data back to binary
-        const converter = converters.get(typeName);
-        if (converter && converter.pack) {
-          data = converter.pack(resourceData.obj);
-        } else {
-          throw new Error(
-            `No pack function available for resource type ${typeName}`,
+    if (skipTypeKeys.has(typeKey)) {
+      continue;
+    }
+    if (onlyTypeKeys.size > 0 && !onlyTypeKeys.has(typeKey)) {
+      continue;
+    }
+
+    const typeMap = new Map<number, Resource>();
+    fork.tree.set(typeKey, typeMap);
+
+    const converter = converters.get(typeKey) || new Base16Converter();
+
+    if (!isRecord(typeRecords)) {
+      return err(`Type ${typeName} is not an object`);
+    }
+
+    for (const [resIdStr, resBlob] of Object.entries(typeRecords)) {
+      if (!isResourceWrapper(resBlob)) {
+        return err(`Resource ${typeName} #${resIdStr} is not an object`);
+      }
+
+      const wrapper = resBlob;
+
+      const resNum = parseInt(resIdStr, 10);
+      const resName = encode(wrapper.name ?? "", "replace");
+      const resFlags = wrapper.flags ?? 0;
+      const resJunk = wrapper.junk ?? 0;
+      const resOrder = wrapper.order !== undefined ? wrapper.order : -1;
+
+      // Prefer converter-specific JSON key (e.g., 'obj'), but fall back to base16 'data' when present
+      const dataBlob = wrapper[converter.jsonKey];
+      let packResult;
+
+      if (dataBlob === undefined && wrapper.data !== undefined) {
+        // The converter-specific value is missing (unpacked failed earlier); use base16 fallback
+        const base16Pack = new Base16Converter().pack(wrapper.data);
+        if (!base16Pack.ok) {
+          return err(
+            `Failed to pack ${typeName} #${resIdStr} from base16 fallback: ${base16Pack.error}`,
           );
         }
-      } else if (resourceData.data !== undefined) {
-        // Convert hex string back to binary
-        const hexStr = resourceData.data;
-        const bytes = new Uint8Array(hexStr.length / 2);
-        for (let i = 0; i < hexStr.length; i += 2) {
-          bytes[i / 2] = parseInt(hexStr.substr(i, 2), 16);
-        }
-        data = bytes;
+        packResult = base16Pack;
       } else {
-        throw new Error(
-          `Resource ${typeName}:${id} has neither obj nor data field`,
+        packResult = converter.pack(dataBlob);
+      }
+
+      if (!packResult.ok) {
+        return err(
+          `Failed to pack ${typeName} #${resIdStr}: ${packResult.error}`,
         );
       }
 
-      const resource: Resource = {
-        type: typeName,
-        id,
-        data,
-        name: resourceData.name,
-        flags: resourceData.flags || 0,
-        junk: resourceData.junk || 0,
-        order: resourceData.order || 0xffffffff,
-      };
+      const res = createResource(
+        resType,
+        resNum,
+        packResult.value,
+        resName,
+        resFlags,
+        resJunk,
+        resOrder,
+      );
 
-      typeResources.set(id, resource);
-    }
-
-    if (typeResources.size > 0) {
-      resources.set(typeName, typeResources);
+      typeMap.set(resNum, res);
     }
   }
 
-  return {
-    resources,
-    fileAttributes,
-    junkNextresmap,
-    junkFilerefnum,
-  };
+  return ok(fork);
+}
+
+/**
+ * Converts a resource fork to a JSON string
+ */
+export function resourceForkToJsonString(
+  fork: ResourceFork,
+  includeTypes: Uint8Array[] = [],
+  excludeTypes: Uint8Array[] = [],
+  converters: Map<string, ResourceConverter>,
+  metadata: Record<string, unknown> = {},
+  options: JsonOptions = {}
+): Result<string, string> {
+  const jsonResult = resourceForkToJson(
+    fork,
+    includeTypes,
+    excludeTypes,
+    converters,
+    metadata,
+    options,
+  );
+
+  if (!jsonResult.ok) {
+    return jsonResult;
+  }
+
+  try {
+    return ok(JSON.stringify(jsonResult.value, null, "\t"));
+  } catch (e) {
+    return err(`Failed to stringify JSON: ${e}`);
+  }
+}
+
+/**
+ * Parses a JSON string to a resource fork
+ */
+export function jsonStringToResourceFork(
+  jsonString: string,
+  converters: Map<string, ResourceConverter>,
+  onlyTypes: Uint8Array[] = [],
+  skipTypes: Uint8Array[] = [],
+): Result<ResourceFork, string> {
+  let jsonBlob: JsonBlob;
+
+  try {
+    jsonBlob = JSON.parse(jsonString);
+  } catch (e) {
+    return err(`Failed to parse JSON: ${e}`);
+  }
+
+  return jsonToResourceFork(jsonBlob, converters, onlyTypes, skipTypes);
 }

@@ -1,19 +1,100 @@
 {
-  "name": "rsrcdump-ts",
-  "private": true,
-  "version": "0.0.0",
+  "name": "@lachlanbwwright/rsrcdump-ts",
+  "version": "1.0.5",
+  "packageManager": "pnpm@10.26.2",
   "type": "module",
-  "scripts": {
-    "dev": "vite",
-    "build": "tsc && vite build",
-    "preview": "vite preview",
-    "test": "vitest",
-    "test:run": "vitest run"
+  "main": "./build/index.js",
+  "types": "./build/index.d.ts",
+  "module": "./build/index.js",
+  "browser": "./build/index.js",
+  "sideEffects": false,
+  "bin": {
+    "rsrcdump-ts": "./bin/rsrcdump-ts.js"
   },
+  "exports": {
+    ".": {
+      "types": "./build/index.d.ts",
+      "import": "./build/index.js",
+      "require": "./build/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "build/**/*.js",
+    "build/**/*.d.ts",
+    "build/**/*.d.ts.map",
+    "!build/**/*.test.js",
+    "!build/**/*.test.d.ts",
+    "!build/**/*.test.d.ts.map",
+    "!build/**/*.test.js.map",
+    "bin/",
+    "README.md",
+    "LICENSE.md",
+    "BROWSER.md",
+    "API.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "build:watch": "tsc -p tsconfig.json --watch",
+    "prepublishOnly": "pnpm run build && pnpm test",
+    "prepare": "pnpm run build",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:ui": "vitest --ui",
+    "test:coverage": "vitest run --coverage",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "list:large-files": "node scripts/audit-source-limits.js lines",
+    "check:large-files": "node scripts/audit-source-limits.js lines --check",
+    "list:deep-indentation": "node scripts/audit-source-limits.js indentation",
+    "check:deep-indentation": "node scripts/audit-source-limits.js indentation --check",
+    "cli": "tsx src/cli.ts",
+    "pack:test": "./scripts/pack-test.sh",
+    "example:basic": "tsx examples/basic-usage.ts",
+    "example:advanced": "tsx examples/advanced-usage.ts",
+    "verify": "pnpm run lint && pnpm run check:large-files && pnpm run check:deep-indentation && pnpm run build && pnpm test",
+    "verify:browser": "node scripts/verify-browser-compat.js"
+  },
+  "keywords": [
+    "resource-fork",
+    "mac",
+    "macos",
+    "classic-mac",
+    "rsrc",
+    "resource",
+    "converter",
+    "json",
+    "browser",
+    "typescript",
+    "parser",
+    "binary",
+    "macintosh"
+  ],
+  "author": "Lachlan Wright",
+  "license": "MIT",
+  "description": "Browser-compatible TypeScript library for parsing Mac resource forks - Extract and convert with Result/Err error handling",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/LachlanBWWright/rsrcdump.git",
+    "directory": "rsrcdump-ts"
+  },
+  "bugs": {
+    "url": "https://github.com/LachlanBWWright/rsrcdump/issues"
+  },
+  "homepage": "https://github.com/LachlanBWWright/rsrcdump/tree/main/rsrcdump-ts#readme",
   "devDependencies": {
-    "@types/node": "^24.3.0",
-    "typescript": "~5.8.3",
-    "vite": "^7.1.2",
-    "vitest": "^3.2.4"
+    "@eslint/js": "^9.39.2",
+    "@types/node": "^25.0.2",
+    "@typescript-eslint/parser": "^8.67.0",
+    "@vitest/coverage-v8": "^4.1.10",
+    "eslint": "^9.39.2",
+    "eslint-plugin-neverthrow": "^1.1.4",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.67.0",
+    "vitest": "^4.0.15"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }

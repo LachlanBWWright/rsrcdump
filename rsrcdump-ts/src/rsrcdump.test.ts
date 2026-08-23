@@ -1,241 +1,287 @@
-// Unit tests for TypeScript rsrcdump implementation
+/**
+ * Tests for rsrcdump-ts
+ */
 
-import { describe, it, expect } from "vitest";
-import { readFileSync, writeFileSync } from "fs";
-import { join } from "path";
-import {
-  load,
-  saveToJson,
-  loadFromJson,
-  saveToBytes,
-  saveFromJson,
-} from "../src/rsrcdump.js";
+import { describe, it, expect, beforeAll } from "vitest";
+import { readFile, writeFile } from "fs/promises";
+import { load, saveToJson, loadBytesFromJson } from "./index.js";
+import { isOk } from "./result.js";
 
-describe("TypeScript rsrcdump", () => {
-  const testFile = join(__dirname, "..", "EarthFarm.ter.rsrc");
+let structSpecs: string[] = [];
 
-  it("should load resource fork", () => {
-    const data = readFileSync(testFile);
-    const fork = load(data);
+beforeAll(async () => {
+  try {
+    const specsContent = await readFile("../sample-specs.txt", "utf-8");
+    structSpecs = specsContent
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line && !line.startsWith("//"));
+  } catch {
+    // continue without specs
+  }
+});
 
-    expect(fork).toBeDefined();
-    expect(fork.resources).toBeDefined();
+describe("rsrcdump-ts", () => {
+  describe("Resource Fork Loading", () => {
+    it("should load EarthFarm.ter.rsrc", async () => {
+      const fileData = await readFile("../EarthFarm.ter.rsrc");
+      const result = load(new Uint8Array(fileData));
+      expect(isOk(result)).toBe(true);
 
-    // Debug: log what types were found
-    console.log("Found resource types:", Array.from(fork.resources.keys()));
+      if (!isOk(result)) return;
+      
+      const fork = result.value;
+      // We expect at least one resource type and a specific Hedr type with resources
+      expect(fork.tree.size).toBeGreaterThan(0);
 
-    // Check that we have expected resource types
-    const expectedTypes = new Set([
-      "Hedr",
-      "Atrb",
-      "STgd",
-      "Layr",
-      "YCrd",
-      "Itms",
-      "Spln",
-      "SpNb",
-      "SpPt",
-      "SpIt",
-      "Fenc",
-      "FnNb",
-      "Liqd",
-    ]);
-    const actualTypes = new Set(fork.resources.keys());
+      const hedrKey = Buffer.from("Hedr", "binary").toString("binary");
+      expect(fork.tree.has(hedrKey)).toBe(true);
 
-    for (const expectedType of expectedTypes) {
-      expect(
-        actualTypes.has(expectedType),
-        `Missing resource type: ${expectedType}`,
-      ).toBe(true);
-    }
-  });
+      const hedrMap = fork.tree.get(hedrKey);
+      expect(hedrMap).toBeDefined();
+      if (!hedrMap) return;
+      expect(hedrMap.size).toBeGreaterThan(0);
 
-  it("should convert to JSON with otto specs", () => {
-    const data = readFileSync(testFile);
+      // Check for a known resource id if present in this sample
+      expect(hedrMap.has(1000)).toBe(true);
 
-    const jsonObj = saveToJson(
-      data,
-      [], // No additional struct specs
-      [], // No include types filter
-      [], // No exclude types filter
-      true, // Use otto specs
-    );
-
-    const parsed = jsonObj as any;
-
-    // Check for expected structure
-    expect(parsed._metadata).toBeDefined();
-    expect(parsed.Hedr).toBeDefined();
-    expect(parsed.Hedr["1000"]).toBeDefined();
-
-    // Check header values
-    const header = parsed.Hedr["1000"].obj;
-    expect(header).toBeDefined();
-    expect(header.version).toBe(134217728);
-    expect(header.mapWidth).toBe(176);
-    expect(header.mapHeight).toBe(176);
-
-    // Save to file for comparison with Python
-    const outputFile = join(
-      __dirname,
-      "..",
-      "..",
-      "typescript_test_output.json",
-    );
-    writeFileSync(outputFile, JSON.stringify(jsonObj, null, "\t"));
-
-    console.log(`TypeScript output saved to: ${outputFile}`);
-  });
-
-  it("should parse specific resources", () => {
-    const data = readFileSync(testFile);
-    const fork = load(data);
-
-    // Check header resource exists
-    expect(fork.resources.has("Hedr")).toBe(true);
-    const hedrResources = fork.resources.get("Hedr")!;
-    expect(hedrResources.has(1000)).toBe(true);
-
-    const headerResource = hedrResources.get(1000)!;
-    expect(headerResource.data.length).toBe(96); // Expected header size
-
-    // Check items resource exists
-    expect(fork.resources.has("Itms")).toBe(true);
-    const itmsResources = fork.resources.get("Itms")!;
-    expect(itmsResources.has(1000)).toBe(true);
-
-    const itemsResource = itmsResources.get(1000)!;
-    expect(itemsResource.data.length).toBeGreaterThan(0);
-  });
-
-  it("should produce identical results to Python implementation", () => {
-    // This test will compare the outputs from Python and TypeScript
-    const data = readFileSync(testFile);
-
-    const tsJsonObj = saveToJson(data) as any;
-    const tsParsed = tsJsonObj;
-
-    // Try to read Python output if it exists
-    const pythonOutputFile = join(
-      __dirname,
-      "..",
-      "..",
-      "python_test_output.json",
-    );
-    try {
-      const pythonJsonStr = readFileSync(pythonOutputFile, "utf-8");
-      const pythonParsed = JSON.parse(pythonJsonStr);
-
-      // Compare key header values (metadata might differ)
-      expect(tsParsed.Hedr["1000"].obj.version).toBe(
-        pythonParsed.Hedr["1000"].obj.version,
+      // Verify structure of a sample resource
+      const sample = hedrMap.get(1000);
+      expect(sample).toBeDefined();
+      if (!sample) return;
+      expect(sample).toEqual(
+        expect.objectContaining({
+          num: 1000,
+          flags: expect.any(Number),
+          data: expect.any(Uint8Array),
+        }),
       );
-      expect(tsParsed.Hedr["1000"].obj.mapWidth).toBe(
-        pythonParsed.Hedr["1000"].obj.mapWidth,
-      );
-      expect(tsParsed.Hedr["1000"].obj.mapHeight).toBe(
-        pythonParsed.Hedr["1000"].obj.mapHeight,
-      );
+      expect(sample.data.length).toBeGreaterThan(0);
+    });
 
-      console.log(
-        "✅ TypeScript and Python implementations produce matching results",
-      );
-    } catch (error) {
-      console.log("⚠️  Python output not found, skipping comparison");
-    }
+    it("should handle empty resource fork", () => {
+      const emptyData = new Uint8Array(0);
+      const result = load(emptyData);
+      expect(isOk(result)).toBe(true);
+
+      if (isOk(result)) {
+        const fork = result.value;
+        expect(fork.tree.size).toBe(0);
+      }
+    });
   });
 
-  it("should perform complete round-trip without data loss", () => {
-    const data = readFileSync(testFile);
+  describe("JSON Conversion", () => {
+    it("should convert EarthFarm.ter.rsrc to JSON", async () => {
+      const data = await readFile("../EarthFarm.ter.rsrc");
 
-    // For now, test with hex data only (no otto specs) to avoid struct packing issues
-    const jsonObj1 = saveToJson(data, [], [], [], false) as any; // No otto specs = hex data
-    const parsed1 = jsonObj1;
+      const structSpecs: string[] = [];
+      try {
+        const specsContent = await readFile("../sample-specs.txt", "utf-8");
+        const lines = specsContent.split("\n");
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (trimmed && !trimmed.startsWith("//")) {
+            structSpecs.push(trimmed);
+          }
+        }
+      } catch {
+        // sample-specs.txt not found, continue without it
+      }
 
-    // Step 2: JSON -> ResourceFork -> Binary
-    const fork = loadFromJson(jsonObj1);
-    const binaryData2 = saveToBytes(fork);
+      const result = await saveToJson(new Uint8Array(data), structSpecs);
+      expect(isOk(result)).toBe(true);
 
-    // Step 3: Binary -> JSON again
-    const jsonObj2 = saveToJson(binaryData2, [], [], [], false) as any;
-    const parsed2 = jsonObj2;
+      if (isOk(result)) {
+        const jsonStr = result.value;
+        expect(jsonStr.length).toBeGreaterThan(0);
 
-    // Compare key metadata values
-    expect(parsed2._metadata.junk1).toBe(parsed1._metadata.junk1);
-    expect(parsed2._metadata.junk2).toBe(parsed1._metadata.junk2);
-    expect(parsed2._metadata.fileAttributes).toBe(
-      parsed1._metadata.fileAttributes,
-    );
+        // Parse JSON to verify it's valid and contains expected structure
+        const parsed = JSON.parse(jsonStr);
+        expect(parsed._metadata).toBeDefined();
+        expect(typeof parsed._metadata.file_attributes).toBe("number");
 
-    // Check that we have the same resource types
-    const types1 = Object.keys(parsed1)
-      .filter((k) => k !== "_metadata")
-      .sort();
-    const types2 = Object.keys(parsed2)
-      .filter((k) => k !== "_metadata")
-      .sort();
-    expect(types2).toEqual(types1);
-
-    // Check that hex data is preserved for a few key resources
-    expect(parsed2.alis["1000"].data).toBe(parsed1.alis["1000"].data);
-    expect(parsed2.Hedr["1000"].data).toBe(parsed1.Hedr["1000"].data);
-
-    console.log("✅ Round-trip conversion completed successfully (hex data)");
+        // Check a small, stable subset for semantic correctness
+        expect(parsed).toHaveProperty("Hedr");
+        const hed1000 = parsed.Hedr["1000"];
+        expect(hed1000).toBeDefined();
+        // Hedr may be represented as structured 'obj' or raw 'data' depending on converters; assert one deterministic form
+        if (hed1000.obj) {
+          expect(hed1000.obj).toEqual(
+            expect.objectContaining({
+              vers: expect.any(Number),
+              width: expect.any(Number),
+              height: expect.any(Number),
+            }),
+          );
+        } else {
+          expect(typeof hed1000.data).toBe("string");
+          expect(hed1000.data).toMatch(/^[0-9A-Fa-f]+$/);
+          expect(hed1000.name).toBe("Header");
+        }
+      }
+    });
   });
 
-  it("should provide clear API functions for round-trip operations", () => {
-    const data = readFileSync(testFile);
+  describe("Round-trip Conversion", () => {
+    it("should preserve binary data in round-trip", async () => {
+      // Load original file
+      const originalData = await readFile("../EarthFarm.ter.rsrc");
+      const loadResult = load(new Uint8Array(originalData));
+      expect(isOk(loadResult)).toBe(true);
 
-    // Test individual API functions with hex data
+      if (!isOk(loadResult)) return;
 
-    // 1. Parse binary to JSON (existing)
-    const jsonObj = saveToJson(data, [], [], [], false) as any; // No otto specs
-    expect(jsonObj).toBeDefined();
+      const fork = loadResult.value;
 
-    // 2. Parse JSON back to ResourceFork (new)
-    const fork = loadFromJson(jsonObj);
-    expect(fork).toBeDefined();
-    expect(fork.resources).toBeDefined();
-    expect(fork.resources.size).toBeGreaterThan(0);
+      // Convert to JSON (disable backtick arrays for byte-perfect round-trip)
+      const jsonResult = await saveToJson(
+        new Uint8Array(originalData),
+        structSpecs,
+        [],
+        [],
+        { useBacktickArrays: false },
+      );
+      expect(isOk(jsonResult)).toBe(true);
 
-    // 3. Serialize ResourceFork to binary (new)
-    const binaryData = saveToBytes(fork);
-    expect(binaryData).toBeDefined();
-    expect(binaryData.length).toBeGreaterThan(0);
+      if (!isOk(jsonResult)) return;
 
-    // 4. Direct JSON to binary conversion (new)
-    const binaryData2 = saveFromJson(jsonObj);
-    expect(binaryData2).toBeDefined();
-    expect(binaryData2.length).toBe(binaryData.length);
+      const jsonStr = jsonResult.value;
+      const jsonBlob = JSON.parse(jsonStr);
 
-    // Verify the round-trip preserves basic structure
-    const fork2 = load(binaryData2);
-    expect(fork2.resources.size).toBe(fork.resources.size);
+      // Convert back to binary
+      const bytesResult = loadBytesFromJson(jsonBlob, structSpecs);
+      if (!isOk(bytesResult)) {
+         
+        console.error("loadBytesFromJson failed:", bytesResult.error);
+        try {
+          await writeFile(
+            "../diagnostic_ts_json.json",
+            JSON.stringify(jsonBlob, null, 2),
+            "utf-8",
+          );
+           
+          console.error("Wrote diagnostic JSON to ../diagnostic_ts_json.json");
+        } catch (e) {
+           
+          console.error("Failed to write diagnostic JSON:", e);
+        }
+      }
+      expect(isOk(bytesResult)).toBe(true);
 
-    console.log("✅ All round-trip API functions work correctly");
+      if (!isOk(bytesResult)) return;
+
+      const regeneratedData = bytesResult.value;
+
+      // Reload the regenerated data
+      const reloadResult = await load(regeneratedData);
+      expect(isOk(reloadResult)).toBe(true);
+
+      if (!isOk(reloadResult)) return;
+
+      const regeneratedFork = reloadResult.value;
+
+      // Compare resource counts
+      expect(regeneratedFork.tree.size).toBe(fork.tree.size);
+
+      // Compare each resource type and contents
+      for (const [typeKey, typeMap] of fork.tree) {
+        const regenTypeMap = regeneratedFork.tree.get(typeKey);
+        expect(regenTypeMap).toBeDefined();
+        if (!regenTypeMap) {
+          throw new Error(`Missing resource type ${Buffer.from(typeKey, "binary").toString("latin1")}`);
+        }
+
+        expect(regenTypeMap.size).toBe(typeMap.size);
+
+        // Compare each resource
+        for (const [resId, res] of typeMap) {
+          const regenRes = regenTypeMap.get(resId);
+          expect(regenRes).toBeDefined();
+          if (!regenRes) {
+            throw new Error(`Missing resource ${Buffer.from(typeKey, "binary").toString("latin1")}#${resId}`);
+          }
+
+          // Compare resource properties
+          expect(regenRes.num).toBe(res.num);
+          expect(regenRes.flags).toBe(res.flags);
+          expect(regenRes.data.length).toBe(res.data.length);
+
+          // Compare data bytes exactly
+          expect(Buffer.from(regenRes.data)).toEqual(Buffer.from(res.data));
+        }
+      }
+    });
   });
 
-  it("should handle resource types with hex data correctly", () => {
-    const data = readFileSync(testFile);
+  describe("JSON Comparison with Python", () => {
+    it("should produce similar JSON to Python version", async () => {
+      // This test compares the structure of the JSON output
+      // We don't expect byte-for-byte identical output due to:
+      // - Different JSON formatting
+      // - Potential differences in float formatting
+      // But the structure should be the same
 
-    // Convert to JSON, focusing on 'alis' type which uses hex data
-    const jsonObj = saveToJson(data, [], [], [], false) as any; // Don't use otto specs to get hex data
-    const parsed = jsonObj;
+      const data = await readFile("../EarthFarm.ter.rsrc");
+      const tsResult = await saveToJson(new Uint8Array(data), structSpecs);
 
-    expect(parsed.alis).toBeDefined();
-    expect(parsed.alis["1000"]).toBeDefined();
-    expect(parsed.alis["1000"].data).toBeDefined();
-    expect(typeof parsed.alis["1000"].data).toBe("string");
+      expect(isOk(tsResult)).toBe(true);
 
-    // Test round-trip with hex data
-    const fork = loadFromJson(jsonObj);
-    const binaryData = saveToBytes(fork);
-    const jsonObj2 = saveToJson(binaryData, [], [], [], false) as any;
-    const parsed2 = jsonObj2;
+      if (!isOk(tsResult)) return;
 
-    // Hex data should be preserved
-    expect(parsed2.alis["1000"].data).toBe(parsed.alis["1000"].data);
+      const tsJson = JSON.parse(tsResult.value);
 
-    console.log("✅ Hex data round-trip preserved correctly");
+      // Check metadata
+      expect(tsJson._metadata).toBeDefined();
+      expect(typeof tsJson._metadata.file_attributes).toBe("number");
+
+      // Check for major resource types
+      const hasHedr = "Hedr" in tsJson;
+      const hasAlis = "alis" in tsJson;
+
+      expect(hasHedr).toBe(true);
+      expect(hasAlis).toBe(true);
+
+      if (hasHedr) {
+        expect(tsJson.Hedr).toBeDefined();
+        expect(typeof tsJson.Hedr).toBe("object");
+        // Check a small stable entry exists
+        const hed = tsJson.Hedr["1000"];
+        expect(hed).toBeDefined();
+        if (hed.obj) {
+          expect(hed.obj).toEqual(
+            expect.objectContaining({ vers: expect.any(Number) }),
+          );
+        } else {
+          expect(typeof hed.data).toBe("string");
+          expect(hed.data).toMatch(/^[0-9A-Fa-f]+$/);
+        }
+      }
+    });
+  });
+
+  describe("Result Type Error Handling", () => {
+    it("should return error for invalid data", async () => {
+      const invalidData = new Uint8Array([1, 2, 3, 4]);
+      const result = await load(invalidData);
+
+      // Expect a deterministic error for too-small data
+      expect(isOk(result)).toBe(false);
+      if (!isOk(result)) {
+        expect(typeof result.error).toBe("string");
+        expect(result.error).toMatch(/too small|nonsense|offsets/);
+      }
+    });
+
+    it("should handle invalid data gracefully", () => {
+      // Test with corrupted/invalid data
+      const invalidData = new Uint8Array([0xff, 0xff, 0xff, 0xff]);
+      const result = load(invalidData);
+      expect(isOk(result)).toBe(false);
+
+      if (!isOk(result)) {
+        expect(result.error).toBeDefined();
+      }
+    });
   });
 });

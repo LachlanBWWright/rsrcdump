@@ -1,0 +1,3 @@
+Error: loadBytesFromJsonAsync failed: Failed to pack Liqd #1000: Failed to pack record: Error: Expected number for field format h
+    at /home/runner/work/rsrcdump/rsrcdump/rsrcdump-ts/src/integration.test.ts:490:17
+    at file:///home/runner/work/rsrcdump/rsrcdump/rsrcdump-ts/node_modules/@vitest/runner/dist/index.js:915:20

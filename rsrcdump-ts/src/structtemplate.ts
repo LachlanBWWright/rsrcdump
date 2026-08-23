@@ -1,327 +1,217 @@
-// Struct template parsing for binary data formats
+/**
+ * Struct template parsing for custom resource formats
+ */
 
-import type { StructTemplate } from './types.js';
+import { calcsize } from './packutils.js';
+import { Result, ok, err } from './result.js';
 
-export class StructTemplateParser {
-  static fromTemplateString(template: string): StructTemplate {
-    const split = template.split(':', 3);
-    
-    const formatStr = split.shift()!;
-    const fieldNames = split.length > 0 ? split.shift()!.split(',') : [];
-    
-    if (!formatStr) {
-      throw new Error('Empty format string');
+export { unpackRecord } from "./structtemplate-unpack.js";
+export { pack } from "./structtemplate-pack.js";
+
+export interface BacktickGroup {
+  baseName: string;
+  startIndex: number;
+  count: number;
+  fieldsPerItem: number;
+}
+
+export interface StructTemplate {
+  format: string;
+  recordLength: number;
+  fieldFormats: string[];
+  fieldNames: (string | null)[];
+  isList: boolean;
+  isScalar: boolean;
+  backtickGroups: BacktickGroup[];
+}
+
+/**
+ * Splits a struct format into individual field formats
+ */
+function splitStructFormatFields(fmt: string): string[] {
+  const fields: string[] = [];
+  let repeat = 0;
+
+  for (const c of fmt) {
+    // Ignore endianness markers and whitespace
+    if (c === ' ' || c === '@' || c === '!' || c === '>' || c === '<' || c === '=') {
+      continue;
     }
-    
-    return new StructTemplateParser(formatStr, fieldNames).build();
+
+    // Parse repeat count
+    if (/[0-9]/.test(c)) {
+      if (repeat !== 0) {
+        repeat *= 10;
+      }
+      repeat += parseInt(c, 10);
+      continue;
+    }
+
+    // Handle field types
+    if ('CB?HILFQDcbhilfdq'.toUpperCase().includes(c.toUpperCase()) || c === 'x') {
+      for (let j = 0; j < Math.max(repeat, 1); j++) {
+        fields.push(c);
+      }
+      repeat = 0;
+    } else if (c === 's') {
+      fields.push(`${Math.max(repeat, 1)}${c}`);
+      repeat = 0;
+    } else {
+      throw new Error(`Unsupported struct format character '${c}'`);
+    }
   }
 
-  private formatStr: string;
-  private fieldNames: string[];
-  private isList: boolean = false;
-  private recordLength: number = 0;
+  return fields;
+}
 
-  constructor(formatStr: string, fieldNames: string[]) {
-    this.formatStr = formatStr;
-    this.fieldNames = fieldNames;
-    
-    // Handle list indicator
-    if (this.formatStr.endsWith('+')) {
-      this.isList = true;
-      this.formatStr = this.formatStr.slice(0, -1);
-    }
-    
-    // Add endianness if not specified (default to big-endian)
-    if (!this.formatStr.match(/^[!@=<>]/)) {
-      this.formatStr = '>' + this.formatStr;
-    }
+/**
+ * Creates a struct template from a template string
+ */
+export function structTemplateFromString(template: string): Result<StructTemplate, string> {
+  const parts = template.split(':', 3);
+
+  let formatStr = parts[0];
+  if (!formatStr) {
+    return err('Empty format string');
   }
 
-  build(): StructTemplate {
-    const fieldFormats = this.splitStructFormatFields(this.formatStr);
-    this.recordLength = this.calculateRecordLength(fieldFormats);
-    
-    return {
-      format: this.formatStr,
-      fieldNames: this.expandFieldNames(fieldFormats),
-      isList: this.isList,
-      recordLength: this.recordLength
-    };
+  const fieldNames: string[] = parts[1] ? parts[1].split(',') : [];
+
+  // Add endianness prefix if not present
+  if (!formatStr.startsWith('!') && !formatStr.startsWith('>') && 
+      !formatStr.startsWith('<') && !formatStr.startsWith('@') && 
+      !formatStr.startsWith('=')) {
+    formatStr = '>' + formatStr;
   }
 
-  private splitStructFormatFields(fmt: string): string[] {
-    const fields: string[] = [];
-    let repeat = 0;
-    
-    for (let i = 0; i < fmt.length; i++) {
-      const c = fmt[i];
-      
-      // Ignore redundant values
-      if (/\s/.test(c) || '@!><'.includes(c)) {
+  // Check for list suffix
+  let isList = false;
+  if (formatStr.endsWith('+')) {
+    isList = true;
+    formatStr = formatStr.slice(0, -1);
+  }
+
+  const fieldFormats = splitStructFormatFields(formatStr);
+  const recordLength = calcsize(formatStr);
+
+  // Expand field name macros and track backtick groups
+  const expandedFieldNames: string[] = [];
+  const backtickGroups: BacktickGroup[] = [];
+  let currentFieldIndex = 0;
+  
+  for (const field of fieldNames) {
+    if (!field) {
+      expandedFieldNames.push('');
+      currentFieldIndex++;
+      continue;
+    }
+
+    // Multi-field macro
+    if (field.endsWith(']')) {
+      const indexPos = field.indexOf('[');
+      if (indexPos === -1) {
+        expandedFieldNames.push(field);
+        currentFieldIndex++;
         continue;
       }
-      
-      // Calculate repeat count
-      if (/\d/.test(c)) {
-        repeat = repeat * 10 + parseInt(c);
-        continue;
+
+      const repeatCount = parseInt(field.slice(indexPos + 1, field.lastIndexOf(']')), 10);
+      const baseName = field.slice(0, indexPos);
+      const fieldValues = baseName.split('`');
+
+      // Check if this is an array macro (single field or backtick macro)
+      // Single field with repeat > 1: values[4] -> treat as array
+      // Backtick with any repeat: x`y[1] or x`y[2] -> treat as array of objects
+      const isBacktickMacro = baseName.includes('`');
+      if (repeatCount > 1 || isBacktickMacro) {
+        // Store the base name without backticks for single-field arrays
+        const groupBaseName = fieldValues.length === 1 ? (fieldValues[0] || baseName) : baseName;
+        backtickGroups.push({
+          baseName: groupBaseName,
+          startIndex: currentFieldIndex,
+          count: repeatCount,
+          fieldsPerItem: fieldValues.length
+        });
       }
-      
-      // Handle format characters
-      if (/[CB?HILFQD]/.test(c.toUpperCase()) || c === 'x') {
-        for (let j = 0; j < Math.max(repeat || 1, 1); j++) {
-          fields.push(c);
+
+      for (let i = 0; i < repeatCount; i++) {
+        for (const fv of fieldValues) {
+          expandedFieldNames.push(`${fv}_${i}`);
+          currentFieldIndex++;
         }
-        repeat = 0;
-      } else if (c === 's') {
-        fields.push(`${Math.max(repeat || 1, 1)}${c}`);
-        repeat = 0;
-      } else {
-        throw new Error(`Unsupported struct format character '${c}'`);
       }
+    } else {
+      expandedFieldNames.push(field);
+      currentFieldIndex++;
     }
-    
-    return fields;
   }
 
-  private calculateRecordLength(fields: string[]): number {
-    let length = 0;
-    
-    for (const field of fields) {
-      switch (field) {
-        case 'B': // unsigned char
-        case 'b': // signed char
-        case 'c': // char
-        case 'x': // pad byte
-        case '?': // bool
-          length += 1;
-          break;
-        case 'H': // unsigned short
-        case 'h': // signed short
-          length += 2;
-          break;
-        case 'I': // unsigned int
-        case 'i': // signed int
-        case 'L': // unsigned long
-        case 'l': // signed long
-        case 'f': // float
-          length += 4;
-          break;
-        case 'Q': // unsigned long long
-        case 'q': // signed long long  
-        case 'd': // double
-          length += 8;
-          break;
-        default:
-          if (field.endsWith('s')) {
-            // String field like "4s"
-            const num = parseInt(field.slice(0, -1));
-            length += num;
-          } else {
-            throw new Error(`Unknown field type: ${field}`);
-          }
-      }
+  // Match field names to field formats
+  const finalFieldNames: (string | null)[] = [];
+  let userFieldIdx = 0;
+
+  for (let fieldNumber = 0; fieldNumber < fieldFormats.length; fieldNumber++) {
+    const fieldFormat = fieldFormats[fieldNumber];
+    if (!fieldFormat) continue;
+
+    if (fieldFormat === 'x') {
+      // Skip padding bytes
+      continue;
     }
-    
-    return length;
+
+    const fallback = `.field${fieldNumber}`;
+
+    if (userFieldIdx < expandedFieldNames.length) {
+      const name = expandedFieldNames[userFieldIdx];
+      finalFieldNames.push(name || fallback);
+      userFieldIdx++;
+    } else {
+      finalFieldNames.push(fallback);
+    }
   }
 
-  private expandFieldNames(fields: string[]): (string | null)[] {
-    const result: (string | null)[] = [];
-    let fieldNameIndex = 0;
-    let fieldIndex = 0;
-    
-    while (fieldIndex < fields.length && fieldNameIndex < this.fieldNames.length) {
-      const field = fields[fieldIndex];
-      const fieldName = this.fieldNames[fieldNameIndex];
-      
-      // Skip 'x' (padding) fields - they should be ignored completely  
-      if (field === 'x') {
-        result.push(null);
-        fieldIndex++;
-        continue;
-      }
-      
-      // Handle array expansion like x`y[100] -> x_0, y_0, x_1, y_1, ... x_99, y_99
-      if (fieldName && fieldName.includes('[') && fieldName.includes(']')) {
-        const expandedNames = this.expandArrayFieldNames(fieldName, fieldIndex, fields);
-        result.push(...expandedNames);
-        fieldIndex += expandedNames.length;
-        fieldNameIndex++;
-      } else {
-        result.push(fieldName || null);
-        fieldIndex++;
-        fieldNameIndex++;
-      }
-    }
-    
-    // Fill remaining fields with null
-    while (fieldIndex < fields.length) {
-      result.push(null);
-      fieldIndex++;
-    }
-    
-    return result;
+  // Determine if scalar: single field and no user-provided names
+  const isScalar = fieldFormats.length === 1 && fieldNames.length === 0;
+
+  return ok({
+    format: formatStr,
+    recordLength,
+    fieldFormats,
+    fieldNames: isScalar ? [] : finalFieldNames,
+    isList,
+    isScalar,
+    backtickGroups,
+  });
+}
+
+export async function structTemplateFromStringWithTypename(
+  templateArg: string
+): Promise<Result<{ converter: StructTemplate; restype: Uint8Array }, string>> {
+  const trimmed = templateArg.trim();
+  if (!trimmed || trimmed.startsWith('//')) {
+    return err('Empty or comment line');
   }
 
-  private expandArrayFieldNames(fieldName: string, startFieldIndex: number, fields: string[]): string[] {
-    // Handle patterns like x`y[100] which should expand to x_0, y_0, x_1, y_1, ...
-    const match = fieldName.match(/^(.+?)`(.+?)\[(\d+)\]$/);
-    if (!match) {
-      return [fieldName]; // Not an array pattern
-    }
-    
-    const [, prefix, suffix, countStr] = match;
-    const count = parseInt(countStr);
-    
-    // Count how many consecutive non-x fields we have starting from startFieldIndex
-    let availableFields = 0;
-    for (let i = startFieldIndex; i < fields.length && fields[i] !== 'x'; i++) {
-      availableFields++;
-    }
-    
-    // Generate pairs: x_0, y_0, x_1, y_1, ... up to the available field count
-    const result: string[] = [];
-    const numPairs = Math.min(count, Math.floor(availableFields / 2));
-    
-    for (let i = 0; i < numPairs; i++) {
-      result.push(`${prefix}_${i}`);
-      result.push(`${suffix}_${i}`);
-    }
-    
-    return result;
+  const colonIdx = trimmed.indexOf(':');
+  if (colonIdx === -1) {
+    return err('Template must have format: restype:format:fields');
   }
 
-  static unpackRecord(data: Uint8Array, offset: number, template: StructTemplate): any {
-    const view = new DataView(data.buffer, data.byteOffset + offset);
-    const values: any[] = [];
-    let pos = 0;
+  const restypeStr = trimmed.slice(0, colonIdx);
+  const formatStr = trimmed.slice(colonIdx + 1);
 
-    const fields = this.splitStructFormatFields(template.format);
-    
-    for (const field of fields) {
-      switch (field) {
-        case 'B': // unsigned char
-          values.push(view.getUint8(pos));
-          pos += 1;
-          break;
-        case 'b': // signed char
-          values.push(view.getInt8(pos));
-          pos += 1;
-          break;
-        case 'H': // unsigned short (big-endian)
-          values.push(view.getUint16(pos, false));
-          pos += 2;
-          break;
-        case 'h': // signed short (big-endian)
-          values.push(view.getInt16(pos, false));
-          pos += 2;
-          break;
-        case 'I': // unsigned int (big-endian)
-        case 'L': // unsigned long (big-endian)
-          values.push(view.getUint32(pos, false));
-          pos += 4;
-          break;
-        case 'i': // signed int (big-endian)
-        case 'l': // signed long (big-endian)
-          values.push(view.getInt32(pos, false));
-          pos += 4;
-          break;
-        case 'f': // float (big-endian)
-          values.push(view.getFloat32(pos, false));
-          pos += 4;
-          break;
-        case 'Q': // unsigned long long (big-endian)
-          values.push(view.getBigUint64(pos, false));
-          pos += 8;
-          break;
-        case 'q': // signed long long (big-endian)
-          values.push(view.getBigInt64(pos, false));
-          pos += 8;
-          break;
-        case 'd': // double (big-endian)
-          values.push(view.getFloat64(pos, false));
-          pos += 8;
-          break;
-        case 'x': // pad byte - read but don't include in output
-          view.getUint8(pos); // Read but discard
-          values.push(null); // Placeholder for ignored field
-          pos += 1;
-          break;
-        case '?': // bool (treat as byte for now)
-          values.push(view.getUint8(pos));
-          pos += 1;
-          break;
-        default:
-          if (field.endsWith('s')) {
-            // String field
-            const num = parseInt(field.slice(0, -1));
-            const bytes = new Uint8Array(data.buffer, data.byteOffset + offset + pos, num);
-            values.push(new TextDecoder('utf-8').decode(bytes));
-            pos += num;
-          } else {
-            throw new Error(`Unknown field type: ${field}`);
-          }
-      }
-    }
-
-    return this.tagValues(values, template);
+  if (!restypeStr || !formatStr) {
+    return err('Invalid template format');
   }
 
-  static splitStructFormatFields(fmt: string): string[] {
-    // Remove endianness prefix for field parsing
-    const cleanFmt = fmt.replace(/^[!@=<>]/, '');
-    const fields: string[] = [];
-    let repeat = 0;
-    
-    for (let i = 0; i < cleanFmt.length; i++) {
-      const c = cleanFmt[i];
-      
-      // Ignore whitespace
-      if (/\s/.test(c)) {
-        continue;
-      }
-      
-      // Calculate repeat count
-      if (/\d/.test(c)) {
-        repeat = repeat * 10 + parseInt(c);
-        continue;
-      }
-      
-      // Handle format characters
-      if (/[CB?HILFQD]/.test(c.toUpperCase()) || c === 'x') {
-        for (let j = 0; j < Math.max(repeat || 1, 1); j++) {
-          fields.push(c);
-        }
-        repeat = 0;
-      } else if (c === 's') {
-        fields.push(`${Math.max(repeat || 1, 1)}${c}`);
-        repeat = 0;
-      }
-    }
-    
-    return fields;
+  // Parse resource type
+  const { parseTypeName } = await import('./textio.js');
+  const restype = parseTypeName(restypeStr);
+
+  const templateResult = structTemplateFromString(formatStr);
+  if (!templateResult.ok) {
+    return err(templateResult.error);
   }
 
-  private static tagValues(values: any[], template: StructTemplate): any {
-    if (template.fieldNames.length === 1 && !template.fieldNames[0]) {
-      // Scalar value
-      return values[0];
-    }
-    
-    const result: any = {};
-    
-    for (let i = 0; i < values.length && i < template.fieldNames.length; i++) {
-      const fieldName = template.fieldNames[i];
-      
-      // Skip fields that should be ignored (null fieldName means 'x' padding field)
-      if (fieldName === null) {
-        continue;
-      }
-      
-      result[fieldName] = values[i];
-    }
-    
-    return result;
-  }
+  return ok({ converter: templateResult.value, restype });
 }

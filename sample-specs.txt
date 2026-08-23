@@ -1,5 +1,3 @@
-// Struct specifications for Otto Matic terrain files
-
 Hedr:L5i3f4i44s:vers,items,width,height,tilePages,tiles,tileSize,minY,maxY,splines,fences,uniqueST,waters
 YCrd:f+
 Itms:LLHBBBBH+:x,z,type,p0,p1,p2,p3,flags
@@ -9,3 +7,4 @@ Spln:HHLLLHHLhhhh+:numNubs,,,numPoints,,numItems,,,bbTop,bbLeft,bbBottom,bbRight
 SpNb:ff+:x,z
 SpPt:ff+:x,z
 SpIt:fHBBBBH+:placement,type,p0,p1,p2,p3,flags
+Liqd:H x x I i h x x i 200f f f h h h h+:type,flags,height,numNubs,reserved,x`y[100],hotSpotX,hotSpotZ,bBoxTop,bBoxLeft,bBoxBottom,bBoxRight
