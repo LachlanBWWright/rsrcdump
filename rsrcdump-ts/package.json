@@ -1,6 +1,7 @@
 {
   "name": "@lachlanbwwright/rsrcdump-ts",
   "version": "1.0.5",
+  "packageManager": "pnpm@10.26.2",
   "type": "module",
   "main": "./build/index.js",
   "types": "./build/index.d.ts",
@@ -35,19 +36,23 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "build:watch": "tsc -p tsconfig.json --watch",
-    "prepublishOnly": "npm run build && npm test",
-    "prepare": "npm run build",
+    "prepublishOnly": "pnpm run build && pnpm test",
+    "prepare": "pnpm run build",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:ui": "vitest --ui",
     "test:coverage": "vitest run --coverage",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
+    "list:large-files": "node scripts/audit-source-limits.js lines",
+    "check:large-files": "node scripts/audit-source-limits.js lines --check",
+    "list:deep-indentation": "node scripts/audit-source-limits.js indentation",
+    "check:deep-indentation": "node scripts/audit-source-limits.js indentation --check",
     "cli": "tsx src/cli.ts",
     "pack:test": "./scripts/pack-test.sh",
     "example:basic": "tsx examples/basic-usage.ts",
     "example:advanced": "tsx examples/advanced-usage.ts",
-    "verify": "npm run lint && npm run build && npm test",
+    "verify": "pnpm run lint && pnpm run check:large-files && pnpm run check:deep-indentation && pnpm run build && pnpm test",
     "verify:browser": "node scripts/verify-browser-compat.js"
   },
   "keywords": [
@@ -78,20 +83,18 @@
   },
   "homepage": "https://github.com/LachlanBWWright/rsrcdump/tree/main/rsrcdump-ts#readme",
   "devDependencies": {
+    "@eslint/js": "^9.39.2",
     "@types/node": "^25.0.2",
-    "@typescript-eslint/eslint-plugin": "^6.6.0",
-    "@typescript-eslint/parser": "^6.6.0",
+    "@typescript-eslint/parser": "^8.67.0",
+    "@vitest/coverage-v8": "^4.1.10",
     "eslint": "^9.39.2",
-    "eslint-config-prettier": "^10.1.8",
-    "eslint-plugin-vitest": "^0.3.0",
+    "eslint-plugin-neverthrow": "^1.1.4",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
+    "typescript-eslint": "^8.67.0",
     "vitest": "^4.0.15"
   },
   "engines": {
     "node": ">=18.0.0"
-  },
-  "dependencies": {
-    "typescript-eslint": "^8.51.0"
   }
 }

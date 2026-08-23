@@ -7,13 +7,9 @@ import type { ResourceFork } from "./resfork.js";
 import { resourceForkFromBytes, packResourceFork } from "./resfork.js";
 import { unpackAdf, packAdf, ADF_ENTRYNUM_RESOURCEFORK } from "./adf.js";
 import { resourceForkToJsonString, jsonToResourceFork, type JsonOptions, type JsonBlob } from "./jsonio.js";
-import { getStandardConverters, StructConverter, type ResourceConverter } from "./resconverters.js";
-import {
-  structTemplateFromString,
-  structTemplateFromStringWithTypename,
-} from "./structtemplate.js";
+import { getConverters, getConvertersSync } from "./converter-factory.js";
+import { isRecord, isNumber } from "./buffer-utils.js";
 import { parseTypeName } from "./textio.js";
-import { bytesToBinary, isRecord, isNumber } from "./buffer-utils.js";
 import type { Result } from "./result.js";
 import { ok, isOk, err } from "./result.js";
 
@@ -243,64 +239,4 @@ export function loadBytesFromJson(
   }
 
   return ok(binaryFork);
-}
-
-/**
- * Gets converters with custom struct specs
- */
-async function getConverters(structSpecs: string[]): Promise<Map<string, ResourceConverter>> {
-  const converters = getStandardConverters();
-
-  for (const templateArg of structSpecs) {
-    const result = await structTemplateFromStringWithTypename(templateArg);
-    if (isOk(result)) {
-      const { converter, restype } = result.value;
-      const typeKey = bytesToBinary(restype);
-      converters.set(typeKey, new StructConverter(converter));
-    }
-  }
-
-  return converters;
-}
-
-/**
- * Gets converters synchronously
- */
-function getConvertersSync(structSpecs: string[]): Map<string, ResourceConverter> {
-  const converters = getStandardConverters();
-
-  for (const templateArg of structSpecs) {
-    try {
-      const trimmed = templateArg.trim();
-      if (!trimmed || trimmed.startsWith("//")) continue;
-
-      const colonIdx = trimmed.indexOf(":");
-      if (colonIdx === -1) continue;
-
-      const restypeStr = trimmed.slice(0, colonIdx);
-      const formatStr = trimmed.slice(colonIdx + 1);
-      if (!restypeStr || !formatStr) continue;
-
-      const restype = parseTypeName(restypeStr);
-      const templateResult = structTemplateFromString(formatStr);
-      if (!templateResult.ok) {
-        // Skip invalid templates
-         
-        console.warn(
-          `Skipping invalid struct spec: ${templateArg} -> ${templateResult.error}`,
-        );
-        continue;
-      }
-
-      const typeKey = bytesToBinary(restype);
-      converters.set(typeKey, new StructConverter(templateResult.value));
-    } catch (e) {
-      // Ignore errors during parsing of struct specs
-       
-      console.warn(`Failed to parse struct spec '${templateArg}': ${e}`);
-      continue;
-    }
-  }
-
-  return converters;
 }

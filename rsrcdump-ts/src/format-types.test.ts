@@ -57,6 +57,29 @@ describe('Additional Struct Format Types', () => {
       expect(calcsize('>e')).toBe(2);
       expect(calcsize('>3e')).toBe(6);
     });
+
+    it.each([
+      [Infinity, [0x7c, 0x00]],
+      [-Infinity, [0xfc, 0x00]],
+      [0, [0x00, 0x00]],
+      [Number.NaN, [0x7c, 0x01]],
+    ])('round-trips the special value %s', (value, expectedBytes) => {
+      const packed = new Packer().pack('>e', value);
+      expect([...packed]).toEqual(expectedBytes);
+
+      const [unpacked] = new Unpacker(packed).unpack('>e');
+      if (Number.isNaN(value)) {
+        expect(unpacked).toBeNaN();
+        return;
+      }
+      expect(unpacked).toBe(value);
+    });
+
+    it('supports little-endian half-precision values', () => {
+      const packed = new Packer().pack('<e', 1);
+      expect(packed).toEqual(new Uint8Array([0x00, 0x3c]));
+      expect(new Unpacker(packed).unpack('<e')).toEqual([1]);
+    });
   });
 
   describe('ssize_t (n) type', () => {
