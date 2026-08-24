@@ -99,6 +99,231 @@ class SingleStringConverter(ResourceConverter):
         return result
 
 
+class PascalStringConverter(ResourceConverter):
+    """Converts a single classic Mac Pascal string."""
+
+    def unpack(self, res: Resource, fork: ResourceFork) -> str:
+        return Unpacker(res.data).unpack_pstr(get_global_encoding(), 'replace')
+
+    def pack(self, obj: Any) -> bytes:
+        encoded = str(obj).encode(get_global_encoding(), 'replace')
+        if len(encoded) > 255:
+            raise ValueError("Pascal strings cannot exceed 255 bytes")
+        return bytes([len(encoded)]) + encoded
+
+
+class FileReferenceConverter(ResourceConverter):
+    """Compiled FREF: file type, local icon ID, empty Pascal string."""
+
+    def unpack(self, res: Resource, fork: ResourceFork) -> Any:
+        u = Unpacker(res.data)
+        file_type = u.read(4).decode('macroman', 'replace')
+        local_id, = u.unpack('>H')
+        empty_string = u.unpack_pstr(get_global_encoding(), 'replace')
+        return {"fileType": file_type, "localID": local_id, "name": empty_string}
+
+
+class RectanglePositionsConverter(ResourceConverter):
+    """Compiled nrct: a count followed by top/left/bottom/right rectangles."""
+
+    def unpack(self, res: Resource, fork: ResourceFork) -> Any:
+        u = Unpacker(res.data)
+        count, = u.unpack('>H')
+        rectangles = []
+        for _ in range(count):
+            top, left, bottom, right = u.unpack('>hhhh')
+            rectangles.append({"top": top, "left": left, "bottom": bottom, "right": right})
+        if not u.eof():
+            raise ValueError(f"Unexpected trailing bytes in {res.desc()}")
+        return {"count": count, "rectangles": rectangles}
+
+
+class RomOverrideConverter(ResourceConverter):
+    """Compiled ROv#: ROM version followed by resource type/ID pairs."""
+
+    def unpack(self, res: Resource, fork: ResourceFork) -> Any:
+        u = Unpacker(res.data)
+        version, count = u.unpack('>HH')
+        overrides = []
+        for _ in range(count):
+            resource_type = u.read(4).decode('macroman', 'replace')
+            resource_id, = u.unpack('>H')
+            overrides.append({"resourceType": resource_type, "resourceID": resource_id})
+        if not u.eof():
+            raise ValueError("Trailing bytes in ROv# resource")
+        return {"romVersion": version, "resourceCount": count, "overrides": overrides}
+
+
+class BundleConverter(ResourceConverter):
+    """Compiled BNDL mappings used by Finder."""
+
+    def unpack(self, res: Resource, fork: ResourceFork) -> Any:
+        u = Unpacker(res.data)
+        signature = u.read(4).decode('macroman', 'replace')
+        signature_id, = u.unpack('>H')
+        type_count_minus_one, = u.unpack('>H')
+        mappings = []
+        for _ in range(type_count_minus_one + 1):
+            resource_type = u.read(4).decode('macroman', 'replace')
+            pair_count_minus_one, = u.unpack('>H')
+            pairs = []
+            for _ in range(pair_count_minus_one + 1):
+                local_id, resource_id = u.unpack('>HH')
+                pairs.append({"localID": local_id, "resourceID": resource_id})
+            mappings.append({"resourceType": resource_type, "items": pairs})
+        if not u.eof():
+            raise ValueError(f"Unexpected trailing bytes in {res.desc()}")
+        return {"signature": signature, "signatureResourceID": signature_id, "mappings": mappings}
+
+
+class OpenResourceConverter(ResourceConverter):
+    """Compiled open resource: application signature and ordered file types."""
+
+    def unpack(self, res: Resource, fork: ResourceFork) -> Any:
+        u = Unpacker(res.data)
+        signature = u.read(4).decode('macroman', 'replace')
+        file_types = []
+        while not u.eof():
+            file_types.append(u.read(4).decode('macroman', 'replace'))
+        return {"signature": signature, "fileTypes": file_types}
+
+
+class KindResourceConverter(ResourceConverter):
+    """Compiled kind resource: signature, localization, and type/kind pairs."""
+
+    def unpack(self, res: Resource, fork: ResourceFork) -> Any:
+        u = Unpacker(res.data)
+        signature = u.read(4).decode('macroman', 'replace')
+        localization, = u.unpack('>H')
+        entries = []
+        while not u.eof():
+            file_type = u.read(4).decode('macroman', 'replace')
+            entries.append({"fileType": file_type, "kind": u.unpack_pstr(get_global_encoding(), 'replace')})
+        return {"signature": signature, "localization": localization, "entries": entries}
+
+
+class DialogItemListConverter(ResourceConverter):
+    """Decode the compiled Dialog Manager DITL item list."""
+
+    ITEM_NAMES = {
+        0: "userItem", 4: "button", 5: "checkbox", 6: "radioButton",
+        7: "control", 8: "staticText", 16: "editableText", 32: "icon",
+        64: "picture", 128: "help",
+    }
+
+    def unpack(self, res: Resource, fork: ResourceFork) -> Any:
+        u = Unpacker(res.data)
+        count, = u.unpack('>H')
+        items = []
+        for index in range(count + 1):
+            top, left, bottom, right = u.unpack('>hhhh')
+            item_type = u.unpack('>B')[0]
+            item_kind = item_type & 0x7f
+            item = {
+                "index": index + 1,
+                "bounds": {"top": top, "left": left, "bottom": bottom, "right": right},
+                "type": self.ITEM_NAMES.get(item_kind, f"unknown({item_kind})"),
+                "enabled": not bool(item_type & 0x80),
+            }
+            if item_kind in (4, 5, 6, 8, 16):
+                item["text"] = u.unpack_pstr(get_global_encoding(), 'replace')
+            elif item_kind in (7, 32, 64):
+                item["resourceID"], = u.unpack('>H')
+            else:
+                item["data"] = u.read(u.remaining()) if index == count else u.read(0)
+            if u.offset % 2:
+                u.skip(1)
+            items.append(item)
+        return items
+
+
+class ComponentResourceConverter(ResourceConverter):
+    """Compiled ComponentResource used by thng resources."""
+
+    def unpack(self, res: Resource, fork: ResourceFork) -> Any:
+        u = Unpacker(res.data)
+        component_type = u.read(4).decode('macroman', 'replace')
+        subtype = u.read(4).decode('macroman', 'replace')
+        manufacturer = u.read(4).decode('macroman', 'replace')
+        component_flags, component_flags_mask = u.unpack('>II')
+
+        def resource_spec():
+            return {"type": u.read(4).decode('macroman', 'replace'), "id": u.unpack('>h')[0]}
+
+        result = {
+            "description": {
+                "type": component_type, "subtype": subtype,
+                "manufacturer": manufacturer, "flags": component_flags,
+                "flagsMask": component_flags_mask,
+            },
+            "component": resource_spec(), "name": resource_spec(),
+            "info": resource_spec(), "icon": resource_spec(),
+        }
+        if not u.eof(): raise ValueError(f"Unexpected trailing bytes in {res.desc()}")
+        return result
+
+
+class ColorTableConverter(ResourceConverter):
+    """QuickDraw ColorTable used by dctb/ictb resources."""
+
+    def unpack(self, res: Resource, fork: ResourceFork) -> Any:
+        u = Unpacker(res.data)
+        seed, = u.unpack('>I')
+        flags, size_minus_one = u.unpack('>hH')
+        entries = []
+        for _ in range(size_minus_one + 1):
+            value, red, green, blue = u.unpack('>HHHH')
+            entries.append({"value": value, "red": red, "green": green, "blue": blue})
+        if not u.eof(): raise ValueError(f"Unexpected trailing bytes in {res.desc()}")
+        return {"seed": seed, "flags": flags, "entries": entries}
+
+
+class HelpResourceConverter(ResourceConverter):
+    """Decode the common compiled Help Manager header/component envelope."""
+
+    def unpack(self, res: Resource, fork: ResourceFork) -> Any:
+        u = Unpacker(res.data)
+        if len(res.data) < 8: raise ValueError(f"Short Help Manager resource {res.desc()}")
+        version, options, balloon_proc, variation = u.unpack('>hhhh')
+        components = []
+        while not u.eof():
+            size, = u.unpack('>H')
+            payload = u.read(size)
+            components.append({"size": size, "data": base64.b16encode(payload).decode('ascii')})
+        return {"header": {"version": version, "options": options, "balloonDefinitionID": balloon_proc, "variation": variation}, "components": components}
+
+
+class StyledTextConverter(ResourceConverter):
+    """TextEdit StScrpRec / 'styl' style scrap."""
+
+    def unpack(self, res: Resource, fork: ResourceFork) -> Any:
+        u = Unpacker(res.data)
+        count, = u.unpack('>h')
+        styles = []
+        for _ in range(count):
+            start_char, height, ascent, font, face, size, red, green, blue = u.unpack('>ihhhBBhHHH')
+            styles.append({"startChar": start_char, "height": height, "ascent": ascent, "font": font, "face": face, "size": size, "color": {"red": red, "green": green, "blue": blue}})
+        if not u.eof(): raise ValueError(f"Unexpected trailing bytes in {res.desc()}")
+        return {"styleCount": count, "styles": styles}
+
+
+class GammaTableConverter(ResourceConverter):
+    """Variable GammaTbl used by 'gama' resources."""
+
+    def unpack(self, res: Resource, fork: ResourceFork) -> Any:
+        u = Unpacker(res.data)
+        version, gamma_type, formula_size, channels, data_count, data_width = u.unpack('>hhhhhh')
+        formula = u.read(formula_size)
+        bytes_per_sample = max(1, (data_width + 7) // 8)
+        sample_count = channels * data_count
+        samples = []
+        for _ in range(sample_count):
+            raw = u.read(bytes_per_sample)
+            samples.append(int.from_bytes(raw, 'big'))
+        if not u.eof(): raise ValueError(f"Unexpected trailing bytes in {res.desc()}")
+        return {"version": version, "type": gamma_type, "formulaSize": formula_size, "channels": channels, "dataCount": data_count, "dataWidth": data_width, "formulaData": base64.b16encode(formula).decode('ascii'), "samples": samples}
+
+
 class StringListConverter(ResourceConverter):
     """ Converts STR# to a list of strings. """
 
@@ -217,6 +442,9 @@ class IconConverter(ResourceConverter):
         elif res.type in [b'ics8', b'ics4', b'ics#']:
             width, height = 16, 16
             bw_icon_type = b'ics#'
+        elif res.type in [b'icm8', b'icm4', b'icm#']:
+            width, height = 12, 16
+            bw_icon_type = b'icm#'
         else:
             raise ValueError(f"Unsupported icon type: {res.type_str}")
 
@@ -230,11 +458,11 @@ class IconConverter(ResourceConverter):
             bw_icon = b''
             bw_mask = b''
 
-        if res.type in [b'icl8', b'ics8']:
+        if res.type in [b'icl8', b'ics8', b'icm8']:
             image = convert_8bit_icon_to_bgra(color_icon, bw_mask, width, height)
-        elif res.type in [b'icl4', b'ics4']:
+        elif res.type in [b'icl4', b'ics4', b'icm4']:
             image = convert_4bit_icon_to_bgra(color_icon, bw_mask, width, height)
-        elif res.type in [b'ICN#', b'ics#']:
+        elif res.type in [b'ICN#', b'ics#', b'icm#']:
             image = convert_1bit_icon_to_bgra(color_icon, bw_mask, width, height)
         else:
             raise ValueError(f"Unsupported icon type: {res.type_str}")
@@ -255,6 +483,18 @@ TMPL_types = {
 }
 
 standard_converters = {
+    b'BNDL': BundleConverter(),
+    b'DITL': DialogItemListConverter(),
+    b'dctb': ColorTableConverter(),
+    b'ictb': ColorTableConverter(),
+    b'styl': StyledTextConverter(),
+    b'gama': GammaTableConverter(),
+    b'thng': ComponentResourceConverter(),
+    b'FREF': FileReferenceConverter(),
+    b'card': PascalStringConverter(),
+    b'kind': KindResourceConverter(),
+    b'mach': StructConverter(StructTemplate.from_template_string('>HH:hardwareMask,softwareMask')),
+    b'open': OpenResourceConverter(),
     b'cicn': CicnConverter(),
     b'icl4': IconConverter(),
     b'icl8': IconConverter(),
@@ -263,6 +503,9 @@ standard_converters = {
     b'ics#': IconConverter(),
     b'ics4': IconConverter(),
     b'ics8': IconConverter(),
+    b'icm#': IconConverter(),
+    b'icm4': IconConverter(),
+    b'icm8': IconConverter(),
     #b'PICT': FileDumper(".pict", lambda data: b'\0'*512 + data),
     b'PICT': PictConverter(),
     b'plst': TextConverter(),
@@ -272,5 +515,11 @@ standard_converters = {
     b'STR ': SingleStringConverter(),
     b'STR#': StringListConverter(),
     b'TEXT': TextConverter(),
+    b'finf': StructConverter(StructTemplate.from_template_string('>hhh:fontID,fontStyle,fontSize')),
+    b'nrct': RectanglePositionsConverter(),
+    b'ROv#': RomOverrideConverter(),
     b'TMPL': TemplateConverter(),
 }
+
+for _help_type in (b'hdlg', b'hfdr', b'hmnu', b'hovr', b'hrct', b'hwin'):
+    standard_converters[_help_type] = HelpResourceConverter()

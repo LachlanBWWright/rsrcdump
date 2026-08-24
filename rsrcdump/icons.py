@@ -19,7 +19,9 @@ def convert_icon_to_bgra(bw_mask: bytes, width: int, height: int,
         elif width == 16:
             scanline_mask, = u_mask.unpack(">H")
         else:
-            assert False, "unsupported width"
+            row_bytes = (width + 7) // 8
+            scanline_mask = int.from_bytes(u_mask.read(row_bytes), "big")
+            scanline_mask >>= row_bytes * 8 - width
 
         for x in range(width):
             argb = get_pixel(x, y)
@@ -61,7 +63,12 @@ def convert_1bit_icon_to_bgra(bw_data: bytes, bw_mask: bytes,
             scanline_data, = u_data.unpack(">H")
             scanline_mask, = u_mask.unpack(">H")
         else:
-            assert False, "unsupported width"
+            row_bytes = (width + 7) // 8
+            scanline_data = int.from_bytes(u_data.read(row_bytes), "big")
+            scanline_mask = int.from_bytes(u_mask.read(row_bytes), "big")
+            shift = row_bytes * 8 - width
+            scanline_data >>= shift
+            scanline_mask >>= shift
 
         for x in range(width):
             is_black = scanline_data & (1 << (width - 1 - x))

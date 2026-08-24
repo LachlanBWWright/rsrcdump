@@ -10,6 +10,7 @@ import {
   getDefaultOttoConverters,
   loadOttoSpecsFromText,
 } from "./ottoSpecs.js";
+import { defaultStructSpecs } from "./defaultSpecs.js";
 
 export function load(data: Uint8Array): ResourceFork {
   try {
@@ -33,6 +34,7 @@ export function saveToJson(
   includeTypes: string[] = [],
   excludeTypes: string[] = [],
   useOttoSpecs: boolean = true,
+  useDefaultSpecs: boolean = true,
 ): JsonOutput {
   const fork = load(data);
 
@@ -40,7 +42,7 @@ export function saveToJson(
     fork,
     includeTypes.map(parseTypeName),
     excludeTypes.map(parseTypeName),
-    getConverters(structSpecs, useOttoSpecs),
+    getConverters(structSpecs, useOttoSpecs, useDefaultSpecs),
     {},
   );
 }
@@ -54,7 +56,9 @@ export function saveToJsonWithOttoSpecs(
 ): JsonOutput {
   const fork = load(data);
 
-  const converters = new Map(standardConverters);
+  const converters = new Map<string, ResourceConverter>();
+  addStructSpecs(converters, [...defaultStructSpecs]);
+  for (const [type, converter] of standardConverters) converters.set(type, converter);
 
   // Add otto specs converters
   const ottoConverters = loadOttoSpecsFromText(ottoSpecsText);
@@ -84,8 +88,17 @@ export function saveToJsonWithOttoSpecs(
 function getConverters(
   structSpecs: string[],
   useOttoSpecs: boolean = true,
+  useDefaultSpecs: boolean = true,
 ): Map<string, ResourceConverter> {
-  const converters = new Map(standardConverters);
+  const converters = new Map<string, ResourceConverter>();
+
+  // These are validated fixed-size Toolbox layouts. User specs below always
+  // win, which keeps the catalog useful without limiting custom formats.
+  if (useDefaultSpecs) {
+    addStructSpecs(converters, [...defaultStructSpecs]);
+  }
+
+  for (const [type, converter] of standardConverters) converters.set(type, converter);
 
   // Add default otto specs converters if requested
   if (useOttoSpecs) {
@@ -96,7 +109,16 @@ function getConverters(
   }
 
   // Add additional struct specs
-  for (const templateArg of structSpecs) {
+  addStructSpecs(converters, structSpecs);
+
+  return converters;
+}
+
+function addStructSpecs(
+  converters: Map<string, ResourceConverter>,
+  specs: string[],
+) {
+  for (const templateArg of specs) {
     const [converter, restype] =
       StructConverter.fromTemplateStringWithTypename(templateArg);
     if (converter && restype) {
@@ -104,8 +126,6 @@ function getConverters(
       converters.set(typeName, converter);
     }
   }
-
-  return converters;
 }
 
 export function loadFromJson(
@@ -139,3 +159,4 @@ export * from "./resfork.js";
 export * from "./resconverters.js";
 export * from "./structtemplate.js";
 export * from "./jsonio.js";
+export * from "./defaultSpecs.js";

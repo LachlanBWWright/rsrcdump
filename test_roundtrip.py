@@ -67,7 +67,7 @@ def test_typescript_roundtrip():
     print("\n=== TypeScript Roundtrip Test ===")
     
     # Run TypeScript tests which include roundtrip functionality
-    result = subprocess.run(['npm', 'test'], cwd='rsrcdump-ts', capture_output=True, text=True)
+    result = subprocess.run(['pnpm', 'test'], cwd='rsrcdump-ts', capture_output=True, text=True)
     
     if result.returncode != 0:
         print(f"✗ TypeScript tests failed: {result.stderr}")

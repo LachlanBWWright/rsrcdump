@@ -98,8 +98,8 @@ def test_typescript_implementation():
     # Run TypeScript tests
     try:
         result = subprocess.run(
-            ["npm", "test"], 
-            cwd=ts_dir, 
+            ["pnpm", "test"],
+            cwd=ts_dir,
             capture_output=True, 
             text=True,
             timeout=60

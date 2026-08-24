@@ -7,6 +7,7 @@ from rsrcdump.resfork import ResourceFork
 from rsrcdump.adf import unpack_adf, ADF_ENTRYNUM_RESOURCEFORK, NotADFError
 from rsrcdump.jsonio import json_to_resource_fork
 from rsrcdump.resconverters import standard_converters, StructConverter
+from rsrcdump.default_specs import DEFAULT_STRUCT_SPECS
 from rsrcdump.adf import unpack_adf, ADF_ENTRYNUM_RESOURCEFORK, NotADFError
 from rsrcdump.jsonio import resource_fork_to_json, json_to_resource_fork
 from rsrcdump.resconverters import standard_converters, StructConverter
@@ -33,6 +34,7 @@ def save_to_json(
         struct_specs: list[str] = [],
         include_types: list[str] = [], #Only include resources of these types (All if empty)
         exclude_types: list[str] = [], #Skip resources of these types
+        use_default_specs: bool = True,
 ):
     try:
         adf_entries = unpack_adf(bytes)
@@ -45,7 +47,7 @@ def save_to_json(
         fork,
         [parse_type_name(x) for x in include_types],
         [parse_type_name(x) for x in exclude_types],
-        _get_converters(struct_specs),
+        _get_converters(struct_specs, use_default_specs),
         {} #TODO: Metadata not implemented
     )
 
@@ -60,7 +62,7 @@ def load_bytes_from_json(
 ):
     fork = json_to_resource_fork(
         json_blob,
-        _get_converters(struct_specs),
+        _get_converters(struct_specs, use_default_specs=True),
         [parse_type_name(x) for x in only_types],
         [parse_type_name(x) for x in skip_types],
     )
@@ -71,8 +73,17 @@ def load_bytes_from_json(
 
 
 
-def _get_converters(struct_specs: List[str]):
-    converters = standard_converters.copy()
+def _get_converters(struct_specs: List[str], use_default_specs: bool = True):
+    converters = {}
+    templates = [*DEFAULT_STRUCT_SPECS, *struct_specs] if use_default_specs else struct_specs
+    for template_arg in templates:
+        converter, restype = StructConverter.from_template_string_with_typename(template_arg)
+        if converter and restype:
+            converters[restype] = converter
+
+    # Specialized converters are more expressive than a generic template.
+    # User templates are applied last and remain the final authority.
+    converters.update(standard_converters)
     for template_arg in struct_specs:
         converter, restype = StructConverter.from_template_string_with_typename(template_arg)
         if converter and restype:
