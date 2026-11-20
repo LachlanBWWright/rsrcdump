@@ -1,0 +1,44 @@
+{
+  "$schema": "../layout.schema.json",
+  "byteOrder": "big",
+  "types": {
+    "Vector3": { "type": "array", "count": 3, "items": "f32" },
+    "Keyframe": {
+      "type": "struct",
+      "fields": [
+        { "name": "tick", "type": "i32" },
+        { "name": "accelerationMode", "type": "i32" },
+        { "name": "position", "$ref": "#/types/Vector3" },
+        { "name": "rotation", "$ref": "#/types/Vector3" },
+        { "name": "scale", "$ref": "#/types/Vector3" }
+      ]
+    },
+    "Bone": {
+      "type": "struct",
+      "fields": [
+        { "name": "parentBone", "type": "i32" },
+        { "name": "nameBytes", "type": "array", "count": 32, "items": "u8" },
+        { "name": "position", "$ref": "#/types/Vector3" },
+        { "name": "numPointsAttachedToBone", "type": "u16" },
+        { "name": "numNormalsAttachedToBone", "type": "u16" },
+        { "name": "reserved", "type": "array", "count": 8, "items": "u32" }
+      ]
+    }
+  },
+  "resources": {
+    "Bone": { "$ref": "#/types/Bone" },
+    "KeyF": { "type": "array", "count": "remaining", "items": { "$ref": "#/types/Keyframe" } },
+    "RelP": { "type": "array", "count": "remaining", "items": { "$ref": "#/types/Vector3" } },
+    "BonN": { "type": "array", "count": "remaining", "items": "u16" },
+    "BonP": { "type": "array", "count": "remaining", "items": "u16" },
+    "NumK": { "type": "array", "count": "remaining", "items": "i8" },
+    "Evnt": {
+      "type": "array", "count": "remaining",
+      "items": { "type": "struct", "fields": [
+        { "name": "time", "type": "i16" },
+        { "name": "type", "type": "u8" },
+        { "name": "value", "type": "u8" }
+      ] }
+    }
+  }
+}

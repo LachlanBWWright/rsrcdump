@@ -1,0 +1,37 @@
+{
+  "$schema": "../layout.schema.json",
+  "byteOrder": "big",
+  "types": {
+    "Point2": {
+      "type": "struct",
+      "fields": [
+        { "name": "x", "type": "f32" },
+        { "name": "y", "type": "f32" }
+      ]
+    },
+    "Liquid": {
+      "type": "struct",
+      "fields": [
+        { "name": "type", "type": "u16" },
+        { "type": "padding", "bytes": 2 },
+        { "name": "flags", "type": "u32" },
+        { "name": "height", "type": "i32" },
+        { "name": "numNubs", "type": "i16" },
+        { "type": "padding", "bytes": 2 },
+        { "name": "reserved", "type": "i32" },
+        { "name": "nubs", "type": "array", "count": 100, "items": { "$ref": "#/types/Point2" } },
+        { "name": "hotSpotX", "type": "f32" },
+        { "name": "hotSpotZ", "type": "f32" },
+        { "name": "bBoxTop", "type": "i16" },
+        { "name": "bBoxLeft", "type": "i16" },
+        { "name": "bBoxBottom", "type": "i16" },
+        { "name": "bBoxRight", "type": "i16" }
+      ]
+    }
+  },
+  "resources": {
+    "Liqd": { "type": "array", "count": "remaining", "items": { "$ref": "#/types/Liquid" } },
+    "SpNb": { "type": "array", "count": "remaining", "items": { "$ref": "#/types/Point2" } },
+    "SpPt": { "type": "array", "count": "remaining", "items": { "$ref": "#/types/Point2" } }
+  }
+}

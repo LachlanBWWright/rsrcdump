@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.layout.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "allowImportingTsExtensions": false,
+    "declaration": true,
+    "declarationMap": true,
+    "outDir": "build/layout",
+    "rootDir": "src/layout"
+  },
+  "exclude": ["src/layout/**/*.test.ts"]
+}

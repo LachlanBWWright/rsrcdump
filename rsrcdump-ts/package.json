@@ -9,12 +9,21 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "test": "vitest",
-    "test:run": "vitest run"
+    "test:run": "vitest run",
+    "test:pangea": "vitest run --config vitest.pangea.config.ts",
+    "check:layouts": "tsc -p tsconfig.layout.json",
+    "build:layouts": "tsc -p tsconfig.layout.build.json",
+    "test:pangea:json": "vitest run --config vitest.pangea.config.ts tests/pangea/resources.test.ts tests/pangea/jsonLayouts.test.ts"
   },
   "devDependencies": {
     "@types/node": "^24.3.0",
+    "ajv": "^8.20.0",
     "typescript": "~5.8.3",
     "vite": "^7.1.2",
     "vitest": "^3.2.4"
+  },
+  "dependencies": {
+    "neverthrow": "^8.2.0",
+    "zod": "^4.6.7"
   }
 }
